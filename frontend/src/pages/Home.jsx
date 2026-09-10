@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { HeartPulse, Ambulance, Building2, User } from 'lucide-react'
+import { HeartPulse, Ambulance, Building2 } from 'lucide-react'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -42,18 +42,11 @@ export default function Home() {
       </motion.div>
 
       <motion.div 
-        className="z-10 grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl"
+        className="z-10 grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-3xl"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
-        <RoleCard 
-          icon={User}
-          title="Citizen"
-          description="Request emergency assistance and track ambulances in real-time."
-          path="/citizen/login"
-          color="blue"
-        />
         <RoleCard 
           icon={Ambulance}
           title="Ambulance"

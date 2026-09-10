@@ -48,6 +48,7 @@ async function registerCitizen(req, res) {
 
         res.status(201).json({
             message: "Citizen registered successfully",
+            token,
             citizen: {
                 id: citizen._id,
                 name: citizen.name,
@@ -93,6 +94,7 @@ async function loginCitizen(req, res) {
 
         res.status(200).json({
             message: "Citizen logged in successfully",
+            token,
             citizen: {
                 id: citizen._id,
                 name: citizen.name,
@@ -310,8 +312,14 @@ function logoutHospital(req, res) {
 
 async function getMe(req, res) {
     try {
-        const jwt = require('jsonwebtoken')
-        const token = req.cookies.token
+        // Support both cookie and Bearer token
+        let token = req.cookies.token
+        if (!token) {
+            const authHeader = req.headers.authorization
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                token = authHeader.slice(7)
+            }
+        }
         if (!token) return res.status(401).json({ message: 'No session' })
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
@@ -327,7 +335,7 @@ async function getMe(req, res) {
             if (!hospital) return res.status(401).json({ message: 'Not found' })
             return res.json({ user: { id: hospital._id, name: hospital.name, email: hospital.email, location: hospital.location, inventory: hospital.inventory, status: hospital.status, role: 'hospital' } })
         }
-        // citizen
+        // citizen (no role field in token — default)
         const citizen = await citizenModel.findById(id).select('-password')
         if (!citizen) return res.status(401).json({ message: 'Not found' })
         return res.json({ user: { id: citizen._id, name: citizen.name, email: citizen.email, totalRewardPoints: citizen.totalRewardPoints, role: 'citizen' } })

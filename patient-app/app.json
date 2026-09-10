@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Sanjeevan",
+    "slug": "sanjeevan-patient-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#1d4ed8"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is used to capture incident photos for emergency reporting.",
+        "NSPhotoLibraryUsageDescription": "Photo library access is used to attach incident images.",
+        "NSMicrophoneUsageDescription": "Microphone is used for voice description of incidents.",
+        "NSLocationWhenInUseUsageDescription": "Location is used to dispatch emergency services to your position."
+      }
+    },
+    "android": {
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "RECORD_AUDIO",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Sanjeevan to access your photos for incident reporting.",
+          "cameraPermission": "Allow Sanjeevan to use your camera to capture incident photos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Sanjeevan to use your location to dispatch emergency services."
+        }
+      ],
+      "expo-status-bar"
+    ]
+  }
+}
