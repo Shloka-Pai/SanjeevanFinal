@@ -4,11 +4,12 @@ import { View, Text } from 'react-native';
 import ReportScreen from '../screens/ReportScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import RewardsScreen from '../screens/RewardsScreen';
+import ChatScreen from '../screens/ChatScreen';
 
 const Tab = createBottomTabNavigator();
 
 function TabIcon({ label, focused }) {
-  const icons = { Report: '🚨', History: '📋', Rewards: '🏆' };
+  const icons = { Report: '🚨', History: '📋', Rewards: '🏆', Chat: '🩺' };
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={{ fontSize: 20 }}>{icons[label]}</Text>
@@ -37,6 +38,7 @@ export default function MainTabs() {
       <Tab.Screen name="Report" component={ReportScreen} />
       <Tab.Screen name="History" component={HistoryScreen} />
       <Tab.Screen name="Rewards" component={RewardsScreen} />
+      <Tab.Screen name="Chat" component={ChatScreen} />
     </Tab.Navigator>
   );
 }

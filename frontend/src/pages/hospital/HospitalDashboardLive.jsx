@@ -130,14 +130,14 @@ export default function HospitalDashboardLive() {
   }
 
   if (authLoading) {
-    return <div className="min-h-screen bg-gray-50 p-6" />
+    return <div className="min-h-screen p-6" style={{ background: '#E8F4FD' }} />
   }
 
   if (!user || user.role !== 'hospital') return <Navigate to="/hospital/login" />
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-20">
-      <header className="sticky top-0 z-50 glass-panel-light border-b border-slate-200/60 p-4 shadow-sm backdrop-blur-xl bg-white/80">
+    <div className="min-h-screen pb-20" style={{ background: '#E8F4FD' }}>
+      <header className="sticky top-0 z-50 border-b p-4 backdrop-blur-xl" style={{ background: 'rgba(255,255,255,0.55)', borderColor: 'rgba(255,255,255,0.7)', boxShadow: '0 2px 12px rgba(23,43,58,0.07)' }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-emerald-600 rounded-xl shadow-soft">
@@ -148,7 +148,7 @@ export default function HospitalDashboardLive() {
               <p className="text-xs font-semibold text-slate-500">Inbound ambulance triage & routing control center</p>
             </div>
           </div>
-          <button onClick={logout} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 hover:shadow-soft">
+          <button onClick={logout} className="rounded-xl px-5 py-2.5 text-sm font-bold transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.75)', color: '#607080' }}>
             Logout
           </button>
         </div>
@@ -156,7 +156,7 @@ export default function HospitalDashboardLive() {
 
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 p-6 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-6">
-          <section className="glass-panel-light rounded-3xl p-6 md:p-8 shadow-soft border border-white">
+          <section className="rounded-3xl p-6 md:p-8" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid rgba(255,255,255,0.90)', boxShadow: '0 6px 28px rgba(23,43,58,0.10)' }}>
             <div className="mb-6 flex items-center gap-3">
                <div className="p-2 bg-emerald-50 rounded-xl">
                   <Settings2 className="h-6 w-6 text-emerald-500" />
@@ -188,7 +188,7 @@ export default function HospitalDashboardLive() {
             </form>
           </section>
 
-          <section className="glass-panel-light rounded-3xl p-6 md:p-8 shadow-soft border border-white">
+          <section className="rounded-3xl p-6 md:p-8" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid rgba(255,255,255,0.90)', boxShadow: '0 6px 28px rgba(23,43,58,0.10)' }}>
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-rose-50 rounded-xl">
@@ -227,7 +227,7 @@ export default function HospitalDashboardLive() {
         </div>
 
         <div className="space-y-6">
-          <section className="glass-panel-light rounded-3xl p-6 md:p-8 shadow-soft border border-white">
+          <section className="rounded-3xl p-6 md:p-8" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid rgba(255,255,255,0.90)', boxShadow: '0 6px 28px rgba(23,43,58,0.10)' }}>
             <div className="mb-6 flex items-center gap-3">
                 <div className="p-2 bg-blue-50 rounded-xl">
                    <MapIcon className="h-6 w-6 text-blue-500" />
@@ -250,7 +250,7 @@ export default function HospitalDashboardLive() {
             </p>
           </section>
 
-          <section className="glass-panel-light rounded-3xl p-6 md:p-8 shadow-soft border border-white">
+          <section className="rounded-3xl p-6 md:p-8" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid rgba(255,255,255,0.90)', boxShadow: '0 6px 28px rgba(23,43,58,0.10)' }}>
             <div className="mb-6 flex items-center gap-3">
                 <div className="p-2 bg-rose-50 rounded-xl">
                    <Activity className="h-6 w-6 text-rose-500" />

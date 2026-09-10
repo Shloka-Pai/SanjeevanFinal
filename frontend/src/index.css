@@ -84,58 +84,66 @@
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
   }
 
-  /* Earthy ambulance dashboard utilities */
+  /* Ambulance dashboard — clean medical premium palette */
   .amb-bg {
-    background: linear-gradient(135deg, #f5f0e8 0%, #ede8dc 50%, #e8f0e8 100%);
+    background: #E8F4FD;
     min-height: 100vh;
   }
 
+  /* Primary glass card — frosted white */
   .amb-card-primary {
-    background: rgba(255, 252, 245, 0.88);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(210, 200, 180, 0.45);
-    box-shadow: 0 4px 24px -4px rgba(80, 70, 50, 0.08), 0 1px 4px rgba(80,70,50,0.04);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.90);
+    box-shadow: 0 6px 28px rgba(23, 43, 58, 0.10), 0 1px 4px rgba(23,43,58,0.06);
     border-radius: 1.5rem;
   }
 
+  /* Vitals card — teal-tinted frosted glass */
   .amb-card-vitals {
-    background: rgba(220, 237, 220, 0.55);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(130, 170, 130, 0.35);
-    box-shadow: 0 4px 20px -4px rgba(40, 80, 40, 0.10);
+    background: rgba(255, 255, 255, 0.80);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(15, 157, 154, 0.30);
+    box-shadow: 0 6px 28px rgba(15, 157, 154, 0.10), 0 1px 4px rgba(23,43,58,0.06);
     border-radius: 1.5rem;
   }
 
+  /* Secondary glass card — slightly more transparent */
   .amb-card-secondary {
-    background: rgba(245, 240, 228, 0.75);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(200, 190, 165, 0.4);
-    box-shadow: 0 2px 12px -2px rgba(80, 70, 50, 0.07);
+    background: rgba(255, 255, 255, 0.80);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.88);
+    box-shadow: 0 4px 20px rgba(23, 43, 58, 0.09);
     border-radius: 1.25rem;
   }
 
+  /* Map card */
   .amb-card-map {
-    background: rgba(255, 253, 248, 0.9);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(200, 190, 165, 0.4);
-    box-shadow: 0 4px 20px -4px rgba(80, 70, 50, 0.09);
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.90);
+    box-shadow: 0 6px 28px rgba(23, 43, 58, 0.10);
     border-radius: 1.5rem;
   }
 
+  /* Vital stat chip */
   .amb-vital-chip {
-    background: rgba(255, 255, 255, 0.75);
-    border: 1px solid rgba(180, 200, 180, 0.4);
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-radius: 0.875rem;
     padding: 0.75rem;
     text-align: center;
   }
 
+  /* Primary action button — medical green */
   .amb-btn-primary {
-    background: #2d5a27;
+    background: #168A55;
     color: #fff;
     font-weight: 700;
     border-radius: 0.875rem;
@@ -143,32 +151,35 @@
     transition: background 0.2s, transform 0.1s;
     border: none;
   }
-  .amb-btn-primary:hover { background: #234820; }
+  .amb-btn-primary:hover { background: #116B43; }
   .amb-btn-primary:active { transform: scale(0.97); }
-  .amb-btn-primary:disabled { opacity: 0.55; }
+  .amb-btn-primary:disabled { opacity: 0.50; }
 
+  /* Secondary action button — outlined */
   .amb-btn-secondary {
-    background: rgba(255, 252, 245, 0.8);
-    color: #2d5a27;
+    background: rgba(255, 255, 255, 0.75);
+    color: #168A55;
     font-weight: 700;
     border-radius: 0.875rem;
     padding: 0.75rem 1.25rem;
-    border: 1.5px solid #7aab72;
+    border: 1.5px solid #168A55;
     transition: background 0.2s, transform 0.1s;
   }
-  .amb-btn-secondary:hover { background: rgba(220, 237, 220, 0.7); }
+  .amb-btn-secondary:hover { background: rgba(22, 138, 85, 0.08); }
   .amb-btn-secondary:active { transform: scale(0.97); }
-  .amb-btn-secondary:disabled { opacity: 0.55; }
+  .amb-btn-secondary:disabled { opacity: 0.50; }
 
+  /* Live pulse — green */
   .amb-live-pulse {
     animation: ambLivePulse 2s ease-in-out infinite;
   }
 
   @keyframes ambLivePulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(74, 140, 74, 0.5); }
-    50% { box-shadow: 0 0 0 6px rgba(74, 140, 74, 0); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 164, 93, 0.55); }
+    50% { box-shadow: 0 0 0 6px rgba(34, 164, 93, 0); }
   }
 
+  /* Status pill */
   .amb-status-pill {
     display: inline-flex;
     align-items: center;
