@@ -1,14 +1,18 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
 
-// ─── IMPORTANT ───────────────────────────────────────────────────────────────
-// Change this to your machine's local IP when testing on a physical device.
-// e.g. 'http://192.168.1.10:3000/api'
-// For Android emulator use: 'http://10.0.2.2:3000/api'
-// For iOS simulator use:    'http://localhost:3000/api'
-// Current LAN IP (must match Expo Metro / phone Wi‑Fi network)
-// ─────────────────────────────────────────────────────────────────────────────
-export const API_URL = 'http://10.69.5.209:3000/api';
+// Prefer the Expo dev-server host IP for the same Wi‑Fi network.
+// That removes the need to edit a hard-coded phone IP whenever the router changes.
+const hostUri =
+  Constants.expoConfig?.hostUri ||
+  Constants.manifest?.debuggerHost ||
+  Constants.manifest2?.extra?.expoGo?.debuggerHost ||
+  '';
+
+const devHost = hostUri ? hostUri.split(':')[0] : '127.0.0.1';
+
+export const API_URL = `http://${devHost}:3000/api`;
 
 const TOKEN_KEY = 'sanjeevan_token';
 

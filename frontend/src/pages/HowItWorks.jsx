@@ -42,7 +42,7 @@ const steps = [
 export default function HowItWorks() {
   return (
     <PageShell active="how">
-      <section className="rounded-3xl border border-slate-200 bg-white px-8 py-10 shadow-sm md:px-12">
+      <section className="page-hero-card rounded-3xl border border-slate-200 bg-white px-8 py-10 shadow-sm md:px-12">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-700">How to use</p>
         <h1 className="mt-3 max-w-3xl text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
           One workflow, three roles.
@@ -54,12 +54,12 @@ export default function HowItWorks() {
 
       <section className="mt-10 grid gap-5 lg:grid-cols-3">
         {steps.map((step, index) => (
-          <article key={step.for} className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <article key={step.for} className="workflow-card flex h-full flex-col rounded-3xl p-6">
             <div className="mb-5 flex items-start justify-between gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+              <div className="workflow-icon flex h-11 w-11 items-center justify-center rounded-xl">
                 <step.icon className="h-5 w-5" />
               </div>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              <span className="workflow-step-badge rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide">
                 {index + 1}
               </span>
             </div>
@@ -67,7 +67,7 @@ export default function HowItWorks() {
             <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-teal-700">{step.role}</p>
             <ol className="mt-5 flex-1 space-y-4">
               {step.items.map((item, itemIndex) => (
-                <li key={item} className="flex gap-3 text-sm leading-relaxed text-slate-600">
+                <li key={item} className="workflow-list-row flex gap-3 text-sm leading-relaxed text-slate-600">
                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
                     {itemIndex + 1}
                   </span>
@@ -79,9 +79,9 @@ export default function HowItWorks() {
         ))}
       </section>
 
-      <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="workflow-summary-card mt-8 rounded-3xl p-6">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+          <div className="workflow-summary-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
             <FileText className="h-5 w-5" />
           </div>
           <div>

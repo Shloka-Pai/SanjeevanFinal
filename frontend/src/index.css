@@ -202,6 +202,64 @@
     animation: pulseRing 2s cubic-bezier(0.2, 0, 0.8, 1) infinite;
   }
 
+  .about-card {
+    background: linear-gradient(180deg, #ffffff 0%, #eefcfb 100%);
+    border: 1px solid rgba(15, 92, 90, 0.34);
+    box-shadow: 0 14px 34px rgba(15, 92, 90, 0.12), inset 0 0 0 1px rgba(255,255,255,0.8);
+    transition: transform 280ms ease, box-shadow 280ms ease, border-color 280ms ease;
+  }
+
+  .about-card-icon {
+    background: #dffaf5;
+    color: #0f5c5a;
+    border: 1px solid rgba(15, 92, 90, 0.2);
+  }
+
+  .about-card-icon.alt-icon {
+    background: #eef7f6;
+    color: #0f5c5a;
+  }
+
+  .workflow-card {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbfb 100%);
+    border: 1px solid rgba(15, 92, 90, 0.34);
+    box-shadow: 0 16px 38px rgba(15, 92, 90, 0.12);
+    transition: transform 280ms ease, box-shadow 280ms ease;
+  }
+
+  .workflow-icon,
+  .workflow-summary-icon {
+    background: #eafaf8;
+    color: #0f5c5a;
+    border: 1px solid rgba(15, 92, 90, 0.2);
+  }
+
+  .workflow-card,
+  .workflow-summary-card,
+  .page-hero-card {
+    border-radius: 1.75rem;
+  }
+
+  .workflow-step-badge {
+    background: #0f5c5a;
+    color: white;
+  }
+
+  .workflow-summary-card {
+    background: #ffffff;
+    border: 1px solid rgba(15, 92, 90, 0.14);
+    box-shadow: 0 14px 34px rgba(15, 92, 90, 0.08);
+  }
+
+  .workflow-list-row {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid rgba(15, 92, 90, 0.08);
+  }
+
+  .workflow-list-row:last-child {
+    border-bottom: none;
+  }
+
   @keyframes pulseRing {
     0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7); }
     70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(225, 29, 72, 0); }
