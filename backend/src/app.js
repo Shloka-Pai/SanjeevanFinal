@@ -11,22 +11,51 @@ const cors = require('cors')
 
 const app = express()
 
+const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:8081',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:8081',
+    process.env.WEBSITE_URL,
+    process.env.MOBILEAPP_URL,
+].filter(Boolean)
+
+const normalizeOrigin = (value) => {
+    if (!value) return ''
+    try {
+        return new URL(value).origin
+    } catch {
+        return value.replace(/\/api$/, '').replace(/\/$/, '')
+    }
+}
+
+const normalizedAllowedOrigins = new Set(
+    allowedOrigins.map(normalizeOrigin).concat([
+        'http://localhost:5173',
+        'http://localhost:8081',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:8081',
+    ])
+)
+
 app.use(cors({
     origin: (origin, callback) => {
-        const allowed = !origin ||
-            origin.startsWith('http://localhost:') ||
-            origin.startsWith('http://127.0.0.1:') ||
-            /^http:\/\/192\.168\./.test(origin) ||
-            /^http:\/\/10\./.test(origin) ||
-            /^http:\/\/172\.(1[6-9]|2\d|3[01])\./.test(origin);
-
-        if (allowed) {
-            callback(null, true);
-        } else {
-            callback(null, false);
+        const incomingOrigin = normalizeOrigin(origin || '')
+        if (!origin || normalizedAllowedOrigins.has(incomingOrigin)) {
+            callback(null, true)
+            return
         }
+
+        if (/^http:\/\/192\.168\./.test(incomingOrigin) || /^http:\/\/10\./.test(incomingOrigin) || /^http:\/\/172\.(1[6-9]|2\d|3[01])\./.test(incomingOrigin)) {
+            callback(null, true)
+            return
+        }
+
+        callback(null, false)
     },
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }))
 app.use(express.json())
 app.use(cookieParser())

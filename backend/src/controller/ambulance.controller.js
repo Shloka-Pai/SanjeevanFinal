@@ -242,7 +242,7 @@ async function predictAllocation(req, res) {
 
     let mlPrediction
     try {
-      const response = await axios.post('http://127.0.0.1:8000/predict', vitals)
+      const response = await axios.post(`${process.env.ML_URL || 'http://127.0.0.1:8000'}/predict`, vitals)
       mlPrediction = response.data
     } catch (mlErr) {
       console.warn('ML Service unavailable, using local triage engine:', mlErr.message)

@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import axios from 'axios';
 
 axios.defaults.withCredentials = true;
-const API_URL = 'http://localhost:3000/api';
+const API_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api$/, '') || window.location.origin;
 
 const AuthContext = createContext(null);
 
@@ -60,7 +61,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, API_URL }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, API_URL, API_ORIGIN }}>
       {children}
     </AuthContext.Provider>
   );

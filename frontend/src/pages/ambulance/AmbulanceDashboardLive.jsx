@@ -72,7 +72,7 @@ function ensureStringList(value, fallback = []) {
 }
 
 export default function AmbulanceDashboardLive() {
-  const { user, loading: authLoading, API_URL, logout } = useAuth()
+  const { user, loading: authLoading, API_URL, API_ORIGIN, logout } = useAuth()
   const ambulanceUserId = user?.id || user?._id || null
   const [incidents, setIncidents] = useState([])
   const [activeIncident, setActiveIncident] = useState(null)
@@ -174,7 +174,7 @@ export default function AmbulanceDashboardLive() {
 
   useEffect(() => {
     if (!ambulanceUserId) return undefined
-    const socket = io('http://localhost:3000', { withCredentials: true })
+    const socket = io(API_ORIGIN, { withCredentials: true })
     socket.emit('join', `ambulance_${ambulanceUserId}`)
 
     socket.on('incident_created', (data) => {
@@ -198,7 +198,7 @@ export default function AmbulanceDashboardLive() {
     })
 
     return () => socket.disconnect()
-  }, [ambulanceUserId])
+  }, [ambulanceUserId, API_ORIGIN])
 
   useEffect(() => {
     if (!activeIncident?._id) return undefined

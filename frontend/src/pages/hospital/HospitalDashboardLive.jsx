@@ -34,7 +34,7 @@ function getStatusGroup(incident) {
 }
 
 export default function HospitalDashboardLive() {
-  const { user, loading: authLoading, API_URL, logout } = useAuth()
+  const { user, loading: authLoading, API_URL, API_ORIGIN, logout } = useAuth()
   const [inventory, setInventory] = useState({
     icuBeds: user?.inventory?.icuBeds ?? 0,
     ventilators: user?.inventory?.ventilators ?? 0,
@@ -81,7 +81,7 @@ export default function HospitalDashboardLive() {
   useEffect(() => {
     if (!hospitalId) return undefined
 
-    const socket = io('http://localhost:3000', { withCredentials: true })
+    const socket = io(API_ORIGIN, { withCredentials: true })
     socket.emit('join', `hospital_${hospitalId}`)
 
     socket.on('incoming_patient', ({ incident }) => {
@@ -109,7 +109,7 @@ export default function HospitalDashboardLive() {
     })
 
     return () => socket.disconnect()
-  }, [hospitalId])
+  }, [hospitalId, API_ORIGIN])
 
   const handleInventoryUpdate = async (event) => {
     event.preventDefault()

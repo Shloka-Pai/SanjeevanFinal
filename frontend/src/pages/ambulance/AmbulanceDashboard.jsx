@@ -19,7 +19,7 @@ const itemVariants = {
 }
 
 export default function AmbulanceDashboard() {
-  const { user, API_URL, logout } = useAuth()
+  const { user, API_URL, API_ORIGIN, logout } = useAuth()
   const [incidents, setIncidents] = useState([])
   const [activeIncident, setActiveIncident] = useState(null)
   const [vitals, setVitals] = useState({
@@ -84,14 +84,14 @@ export default function AmbulanceDashboard() {
   if (!user || user.role !== 'ambulance') return <Navigate to="/ambulance/login" />
 
   useEffect(() => {
-    const socket = io('http://localhost:3000', { withCredentials: true })
+    const socket = io(API_ORIGIN, { withCredentials: true })
     socket.emit('join', 'ambulance')
     socket.on('incoming_incident', (incident) => setIncidents(prev => [incident, ...prev]))
     socket.on('incident_taken', ({ incidentId }) => {
       setIncidents(prev => prev.filter(i => i._id !== incidentId))
     })
     return () => socket.disconnect()
-  }, [activeIncident])
+  }, [activeIncident, API_ORIGIN])
 
   const handleAccept = async (incident) => {
     try {

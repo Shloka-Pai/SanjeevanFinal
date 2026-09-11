@@ -2,17 +2,12 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 
-// Prefer the Expo dev-server host IP for the same Wi‑Fi network.
-// That removes the need to edit a hard-coded phone IP whenever the router changes.
-const hostUri =
-  Constants.expoConfig?.hostUri ||
-  Constants.manifest?.debuggerHost ||
-  Constants.manifest2?.extra?.expoGo?.debuggerHost ||
-  '';
+const configuredApiUrl =
+  Constants.expoConfig?.extra?.API_URL ||
+  Constants.expoConfig?.extra?.MOBILEAPP_URL ||
+  'http://localhost:3000/api';
 
-const devHost = hostUri ? hostUri.split(':')[0] : '127.0.0.1';
-
-export const API_URL = `http://${devHost}:3000/api`;
+export const API_URL = configuredApiUrl;
 
 const TOKEN_KEY = 'sanjeevan_token';
 

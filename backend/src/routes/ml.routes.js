@@ -4,7 +4,7 @@ const path = require('path')
 const fs = require('fs')
 
 const router = express.Router()
-const ML_URL = 'http://127.0.0.1:8000'
+const ML_URL = process.env.ML_URL || 'http://127.0.0.1:8000'
 
 router.post('/test-ml', async (req, res) => {
     const vitals = req.body

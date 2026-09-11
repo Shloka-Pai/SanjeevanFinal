@@ -20,7 +20,7 @@ const itemVariants = {
 }
 
 export default function HospitalDashboard() {
-  const { user, API_URL, logout } = useAuth()
+  const { user, API_URL, API_ORIGIN, logout } = useAuth()
   
   const [inventory, setInventory] = useState({
     icuBeds: user?.inventory?.icuBeds || 0,
@@ -40,7 +40,7 @@ export default function HospitalDashboard() {
 
   useEffect(() => {
     if(!hospitalId) return;
-    const socket = io('http://localhost:3000', { withCredentials: true })
+    const socket = io(API_ORIGIN, { withCredentials: true })
 
     socket.emit('join', `hospital_${hospitalId}`)
 
@@ -53,7 +53,7 @@ export default function HospitalDashboard() {
     })
 
     return () => socket.disconnect()
-  }, [hospitalId, hospitalLoc])
+  }, [hospitalId, hospitalLoc, API_ORIGIN])
 
   const fetchDirections = (origin, destination) => {
     if(!window.google) return;
