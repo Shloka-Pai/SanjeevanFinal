@@ -5,6 +5,7 @@ import {
   Platform, ScrollView, Alert,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from '../api/client';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
@@ -21,7 +22,13 @@ export default function LoginScreen({ navigation }) {
     try {
       await login(email.trim(), password);
     } catch (err) {
-      Alert.alert('Login failed', err.response?.data?.message || 'Please check your credentials.');
+      const networkHint = !err.response
+        ? `Cannot reach server at ${API_URL}. If your Wi‑Fi IP changed, update API_URL in src/api/client.js.`
+        : null;
+      Alert.alert(
+        'Login failed',
+        err.response?.data?.message || networkHint || err.message || 'Please check your credentials.',
+      );
     } finally {
       setLoading(false);
     }

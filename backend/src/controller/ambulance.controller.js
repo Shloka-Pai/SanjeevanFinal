@@ -14,6 +14,7 @@ const {
   rankHospitalsForIncident,
   serializeHospitalOption,
 } = require('../services/incident.service')
+const { pushTimelineEvent } = require('../services/timeline.service')
 
 async function populateIncident(incidentId) {
   return incidentModel
@@ -40,6 +41,18 @@ function emitAmbulanceCaseUpdate(ambulanceId, incident, extra = {}) {
     incident: buildIncidentRealtimePayload(incident),
     ...extra,
   })
+}
+
+function emitCitizenTripUpdate(citizenId, incident) {
+  if (!citizenId) return
+
+  try {
+    getIO().to(`citizen_${citizenId}`).emit('citizen_trip_update', {
+      incident: buildIncidentRealtimePayload(incident),
+    })
+  } catch (err) {
+    console.log('citizen trip socket emit skipped', err.message)
+  }
 }
 
 async function getPendingIncidents(req, res) {
@@ -173,6 +186,19 @@ async function acceptIncident(req, res) {
       incident.transportStatus = 'dispatching'
     }
 
+    pushTimelineEvent(incident, 'ambulance_dispatched', {
+      ambulanceId: String(req.user.id),
+    })
+
+    if (preAllocatedHospital) {
+      pushTimelineEvent(incident, 'hospital_selected', {
+        hospital: preAllocatedHospital.name,
+      })
+      pushTimelineEvent(incident, 'en_route_hospital', {
+        hospital: preAllocatedHospital.name,
+      })
+    }
+
     await incident.save()
 
     const populatedIncident = await populateIncident(incident._id)
@@ -187,6 +213,7 @@ async function acceptIncident(req, res) {
     }
     
     emitAmbulanceCaseUpdate(req.user.id, populatedIncident)
+    emitCitizenTripUpdate(populatedIncident.reportedBy, populatedIncident)
 
     res.status(200).json({
       message: 'Incident accepted',
@@ -245,6 +272,15 @@ async function predictAllocation(req, res) {
     incident.assignedHospital = bestHospitalOption?.hospital || null
     incident.transportStatus = 'en-route'
     incident.arrivalStatus = 'incoming'
+
+    const hospitalName = bestHospitalOption?.name || bestHospitalOption?.hospital?.name
+    if (hospitalName) {
+      pushTimelineEvent(incident, 'hospital_selected', { hospital: hospitalName })
+    }
+    pushTimelineEvent(incident, 'en_route_hospital', {
+      hospital: hospitalName || undefined,
+    })
+
     await incident.save()
 
     const populatedIncident = await populateIncident(incident._id)
@@ -257,6 +293,7 @@ async function predictAllocation(req, res) {
     }
 
     emitAmbulanceCaseUpdate(req.user.id, populatedIncident)
+    emitCitizenTripUpdate(populatedIncident.reportedBy, populatedIncident)
 
     res.status(200).json({
       message: 'Prediction and allocation complete',
@@ -290,6 +327,14 @@ async function selectHospital(req, res) {
     incident.assignedHospital = nextHospital._id
     incident.transportStatus = 'en-route'
     incident.arrivalStatus = 'incoming'
+
+    pushTimelineEvent(incident, 'hospital_selected', {
+      hospital: nextHospital.name,
+    })
+    pushTimelineEvent(incident, 'en_route_hospital', {
+      hospital: nextHospital.name,
+    })
+
     await incident.save()
 
     const populatedIncident = await populateIncident(incident._id)
@@ -305,6 +350,7 @@ async function selectHospital(req, res) {
       rerouted: previousHospitalId && previousHospitalId !== String(nextHospital._id),
     })
     emitAmbulanceCaseUpdate(req.user.id, populatedIncident)
+    emitCitizenTripUpdate(populatedIncident.reportedBy, populatedIncident)
 
     res.status(200).json({
       message: 'Hospital selected',
@@ -387,6 +433,10 @@ async function streamVitals(req, res) {
         incident.assignedHospital = stabilizationHospital.hospital
         incident.selectedHospital = stabilizationHospital.hospital
         incident.transportStatus = 'rerouted'
+        pushTimelineEvent(incident, 'rerouted', {
+          reason: rerouteReason,
+          hospital: stabilizationHospital.name,
+        })
       }
     }
 
@@ -411,6 +461,7 @@ async function streamVitals(req, res) {
       rerouted,
       reason: rerouteReason,
     })
+    emitCitizenTripUpdate(populatedIncident.reportedBy, populatedIncident)
 
     res.status(200).json({
       message: rerouted ? 'Vitals streamed and route updated' : 'Vitals streamed',
@@ -443,11 +494,21 @@ async function markArrival(req, res) {
 
     incident.arrivalStatus = 'arrived'
     incident.transportStatus = 'arriving'
+
+    let hospitalName
+    if (incident.assignedHospital) {
+      const hospital = await hospitalModel.findById(incident.assignedHospital).select('name')
+      hospitalName = hospital?.name
+    }
+    pushTimelineEvent(incident, 'arrived_er', {
+      hospital: hospitalName,
+    })
     await incident.save()
 
     const populatedIncident = await populateIncident(incident._id)
     emitHospitalCaseUpdate('patient_arrived', populatedIncident.assignedHospital?._id, populatedIncident)
     emitAmbulanceCaseUpdate(req.user.id, populatedIncident)
+    emitCitizenTripUpdate(populatedIncident.reportedBy, populatedIncident)
 
     res.status(200).json({
       message: 'Hospital arrival marked',
@@ -463,20 +524,21 @@ async function completeIncident(req, res) {
     const { incidentId } = req.body
     console.log('completeIncident → completing:', incidentId)
 
-    const incident = await incidentModel.findByIdAndUpdate(
-      incidentId,
-      { status: 'completed', transportStatus: 'completed' },
-      { returnDocument: 'after' }
-    )
-
-    if (!incident) {
+    const existing = await incidentModel.findById(incidentId)
+    if (!existing) {
       return res.status(404).json({ message: 'Incident not found' })
     }
 
-    console.log('completeIncident → updated status:', incident.status)
+    existing.status = 'completed'
+    existing.transportStatus = 'completed'
+    pushTimelineEvent(existing, 'er_handover', {})
+    await existing.save()
 
-    const populatedIncident = await populateIncident(incident._id)
+    console.log('completeIncident → updated status:', existing.status)
+
+    const populatedIncident = await populateIncident(existing._id)
     emitHospitalCaseUpdate('patient_completed', populatedIncident.assignedHospital?._id, populatedIncident)
+    emitCitizenTripUpdate(populatedIncident.reportedBy, populatedIncident)
 
     res.status(200).json({
       message: 'Incident marked as completed',

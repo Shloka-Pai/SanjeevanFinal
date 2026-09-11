@@ -14,6 +14,7 @@ import {
   Save,
   Settings2,
   Siren,
+  BedDouble,
 } from 'lucide-react'
 import LeafletMap from '../../components/LeafletMap'
 
@@ -49,6 +50,9 @@ export default function HospitalDashboardLive() {
     () => incomingPatients.find((incident) => incident._id === selectedIncidentId) || incomingPatients[0] || null,
     [incomingPatients, selectedIncidentId],
   )
+
+  const arrivingCount = incomingPatients.filter((i) => getStatusGroup(i) === 'arriving').length
+  const criticalCount = incomingPatients.filter((i) => i.severityLevel === 'critical').length
 
   useEffect(() => {
     const hydrateCases = async () => {
@@ -92,9 +96,7 @@ export default function HospitalDashboardLive() {
     socket.on('patient_rerouted', ({ incident, reason }) => {
       setIncomingPatients((prev) => mergeIncident(prev, incident))
       setSelectedIncidentId(incident._id)
-      if (reason) {
-        window.console.log(reason)
-      }
+      if (reason) window.console.log(reason)
     })
 
     socket.on('patient_arrived', ({ incident }) => {
@@ -130,192 +132,284 @@ export default function HospitalDashboardLive() {
   }
 
   if (authLoading) {
-    return <div className="min-h-screen p-6" style={{ background: '#E8F4FD' }} />
+    return <div className="min-h-screen bg-[#f4f7f9]" />
   }
 
   if (!user || user.role !== 'hospital') return <Navigate to="/hospital/login" />
 
   return (
-    <div className="min-h-screen pb-20" style={{ background: '#E8F4FD' }}>
-      <header className="sticky top-0 z-50 border-b p-4 backdrop-blur-xl" style={{ background: 'rgba(255,255,255,0.55)', borderColor: 'rgba(255,255,255,0.7)', boxShadow: '0 2px 12px rgba(23,43,58,0.07)' }}>
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-emerald-600 rounded-xl shadow-soft">
-               <Building2 className="h-6 w-6 text-white" />
+    <div className="min-h-screen bg-[#f4f7f9] text-slate-900">
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#0f5c5a] text-white shadow-sm">
+              <Building2 className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl font-extrabold text-slate-800 tracking-tight">{user.name}</h1>
-              <p className="text-xs font-semibold text-slate-500">Inbound ambulance triage & routing control center</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold tracking-tight text-slate-900">{user.name}</h1>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-100">
+                  Hospital portal
+                </span>
+              </div>
+              <p className="text-xs font-medium text-slate-500">
+                Sanjeevan · Inbound triage, bed capacity & ER handoff
+              </p>
             </div>
           </div>
-          <button onClick={logout} className="rounded-xl px-5 py-2.5 text-sm font-bold transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.75)', color: '#607080' }}>
-            Logout
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100 sm:flex">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live operations
+            </div>
+            <button
+              onClick={logout}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 p-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="space-y-6">
-          <section className="rounded-3xl p-6 md:p-8" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid rgba(255,255,255,0.90)', boxShadow: '0 6px 28px rgba(23,43,58,0.10)' }}>
-            <div className="mb-6 flex items-center gap-3">
-               <div className="p-2 bg-emerald-50 rounded-xl">
-                  <Settings2 className="h-6 w-6 text-emerald-500" />
-               </div>
-               <h2 className="text-xl font-extrabold text-slate-800">Inventory Status</h2>
-            </div>
-
-            <form onSubmit={handleInventoryUpdate} className="space-y-4">
-              <label className="block text-sm font-bold text-gray-500">
-                ICU Beds
-                <input type="number" className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 p-3 font-semibold text-lg" value={inventory.icuBeds} onChange={(event) => setInventory({ ...inventory, icuBeds: event.target.value })} />
-              </label>
-              <label className="block text-sm font-bold text-gray-500">
-                Ventilators
-                <input type="number" className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 p-3 font-semibold text-lg" value={inventory.ventilators} onChange={(event) => setInventory({ ...inventory, ventilators: event.target.value })} />
-              </label>
-              <label className="block text-sm font-bold text-gray-500">
-                General Beds
-                <input type="number" className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 p-3 font-semibold text-lg" value={inventory.generalBeds} onChange={(event) => setInventory({ ...inventory, generalBeds: event.target.value })} />
-              </label>
-              <label className="block text-sm font-bold text-gray-500">
-                Specialists
-                <input type="text" className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 p-3 font-medium" value={inventory.specialists} onChange={(event) => setInventory({ ...inventory, specialists: event.target.value })} />
-              </label>
-              <button type="submit" disabled={savingInv} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-100 py-3 font-bold text-emerald-800 transition hover:bg-emerald-200">
-                {savingInv ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-                Save Inventory
-              </button>
-            </form>
-          </section>
-
-          <section className="rounded-3xl p-6 md:p-8" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid rgba(255,255,255,0.90)', boxShadow: '0 6px 28px rgba(23,43,58,0.10)' }}>
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-rose-50 rounded-xl">
-                   <BellRing className="h-6 w-6 text-rose-500 pulse-ring" />
+      <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: 'Inbound cases', value: incomingPatients.length, icon: BellRing, tone: 'text-rose-600 bg-rose-50' },
+            { label: 'Arriving / at ER', value: arrivingCount, icon: Siren, tone: 'text-amber-600 bg-amber-50' },
+            { label: 'Critical acuity', value: criticalCount, icon: Activity, tone: 'text-rose-700 bg-rose-50' },
+            { label: 'ICU beds free', value: inventory.icuBeds, icon: BedDouble, tone: 'text-teal-700 bg-teal-50' },
+          ].map((metric) => (
+            <div key={metric.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{metric.label}</p>
+                <div className={`rounded-xl p-2 ${metric.tone}`}>
+                  <metric.icon className="h-4 w-4" />
                 </div>
-                <h2 className="text-xl font-extrabold text-slate-800">Inbound Cases</h2>
               </div>
-              <span className="rounded-full bg-rose-100 px-3 py-1 text-sm font-bold text-rose-700 shadow-sm border border-rose-200">{incomingPatients.length} Live</span>
+              <p className="text-3xl font-bold text-slate-900">{metric.value}</p>
             </div>
+          ))}
+        </section>
 
-            <div className="space-y-3">
-              {incomingPatients.length === 0 && <p className="text-sm italic text-gray-500">No incoming emergencies currently.</p>}
-              {incomingPatients.map((incident) => (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="space-y-6">
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="rounded-xl bg-slate-100 p-2.5">
+                  <Settings2 className="h-5 w-5 text-slate-700" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Capacity & inventory</h2>
+                  <p className="text-xs text-slate-500">Keep ER resources accurate for ambulance routing</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleInventoryUpdate} className="space-y-4">
+                {[
+                  { label: 'ICU beds', key: 'icuBeds' },
+                  { label: 'Ventilators', key: 'ventilators' },
+                  { label: 'General beds', key: 'generalBeds' },
+                ].map((field) => (
+                  <div key={field.key}>
+                    <label className="mb-1 block text-xs font-semibold text-slate-500">{field.label}</label>
+                    <input
+                      type="number"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-lg font-bold text-slate-900 outline-none ring-[#0f5c5a] focus:bg-white focus:ring-2"
+                      value={inventory[field.key]}
+                      onChange={(event) => setInventory({ ...inventory, [field.key]: event.target.value })}
+                    />
+                  </div>
+                ))}
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500">Specialists on duty</label>
+                  <input
+                    type="text"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-900 outline-none ring-[#0f5c5a] focus:bg-white focus:ring-2"
+                    value={inventory.specialists}
+                    onChange={(event) => setInventory({ ...inventory, specialists: event.target.value })}
+                    placeholder="trauma, cardiology, neurology"
+                  />
+                </div>
+
                 <button
-                  key={incident._id}
-                  onClick={() => setSelectedIncidentId(incident._id)}
-                  className={`w-full rounded-2xl border p-4 text-left transition ${selectedIncident?._id === incident._id ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100 bg-gray-50 hover:bg-gray-100'}`}
+                  type="submit"
+                  disabled={savingInv}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#0f5c5a] py-3.5 text-sm font-bold text-white transition hover:bg-[#0c4c4a]"
                 >
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <Siren className="h-4 w-4 text-rose-600" />
-                      <span className="text-sm font-bold text-gray-900">Ambulance inbound</span>
-                    </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase ${incident.severityLevel === 'critical' ? 'bg-red-100 text-red-700' : incident.severityLevel === 'watch' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                      {incident.severityLevel}
-                    </span>
-                  </div>
-                  <p className="text-sm font-semibold text-gray-800">{incident.symptoms || 'Symptoms pending from ambulance'}</p>
-                  <p className="mt-1 text-xs font-semibold text-gray-500">
-                    {incident.assignedAmbulance?.vehicleNumber || 'Ambulance'} | {getStatusGroup(incident)} | {incident.transportStatus}
-                  </p>
+                  {savingInv ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                  Save inventory
                 </button>
-              ))}
-            </div>
-          </section>
-        </div>
+              </form>
+            </section>
 
-        <div className="space-y-6">
-          <section className="rounded-3xl p-6 md:p-8" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid rgba(255,255,255,0.90)', boxShadow: '0 6px 28px rgba(23,43,58,0.10)' }}>
-            <div className="mb-6 flex items-center gap-3">
-                <div className="p-2 bg-blue-50 rounded-xl">
-                   <MapIcon className="h-6 w-6 text-blue-500" />
-                </div>
-                <h2 className="text-xl font-extrabold text-slate-800">Live Routing Feed</h2>
-            </div>
-            <div className="h-[420px] overflow-hidden rounded-xl bg-gray-100">
-              <LeafletMap
-                origin={selectedIncident ? getIncidentOrigin(selectedIncident) : null}
-                destination={hospitalLoc}
-                strokeColor="#059669"
-                originLabel="A"
-                destLabel="H"
-                height="420px"
-              />
-            </div>
-            <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-gray-500">
-              <MapPin className="h-3.5 w-3.5" />
-              Route is recalculated from the clicked ambulance card and refreshed from the latest streamed ambulance position.
-            </p>
-          </section>
-
-          <section className="rounded-3xl p-6 md:p-8" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid rgba(255,255,255,0.90)', boxShadow: '0 6px 28px rgba(23,43,58,0.10)' }}>
-            <div className="mb-6 flex items-center gap-3">
-                <div className="p-2 bg-rose-50 rounded-xl">
-                   <Activity className="h-6 w-6 text-rose-500" />
-                </div>
-                <h2 className="text-xl font-extrabold text-slate-800">Advanced Handoff Panel</h2>
-            </div>
-
-            {!selectedIncident ? (
-              <p className="text-sm italic text-gray-500">Select an inbound case to view live vitals, symptoms, requirements and specialist needs.</p>
-            ) : (
-              <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
-                    <p className="text-[10px] font-bold uppercase text-gray-500">SpO2</p>
-                    <p className={`text-xl font-black ${Number(selectedIncident.vitals?.spo2) < 92 ? 'text-red-600' : 'text-gray-900'}`}>{selectedIncident.vitals?.spo2 ?? '--'}%</p>
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-rose-50 p-2.5">
+                    <BellRing className="h-5 w-5 text-rose-600" />
                   </div>
-                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
-                    <p className="text-[10px] font-bold uppercase text-gray-500">Heart Rate</p>
-                    <p className="text-xl font-black text-gray-900">{selectedIncident.vitals?.heartRate ?? '--'}</p>
-                  </div>
-                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
-                    <p className="text-[10px] font-bold uppercase text-gray-500">Blood Pressure</p>
-                    <p className="text-xl font-black text-gray-900">{selectedIncident.vitals?.systolicBP ?? '--'}/{selectedIncident.vitals?.diastolicBP ?? '--'}</p>
-                  </div>
-                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
-                    <p className="text-[10px] font-bold uppercase text-gray-500">Status</p>
-                    <p className="text-lg font-black text-emerald-700">{selectedIncident.arrivalStatus}</p>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">Inbound queue</h2>
+                    <p className="text-xs text-slate-500">Select a case to open handoff details</p>
                   </div>
                 </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                  {incomingPatients.length} live
+                </span>
+              </div>
 
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="mb-3 flex items-center gap-2">
-                    <HeartPulse className="h-5 w-5 text-rose-500" />
-                    <h3 className="text-lg font-bold text-gray-900">Patient overview</h3>
-                  </div>
-                  <p className="text-sm font-semibold text-gray-800">Symptoms: {selectedIncident.symptoms || 'Pending symptom update'}</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-700">
-                    Requirements: ICU {selectedIncident.requirements?.icuBeds || 0}, Ventilators {selectedIncident.requirements?.ventilators || 0}, General beds {selectedIncident.requirements?.generalBeds || 0}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-gray-700">
-                    Specialist needs: {selectedIncident.requirements?.specialists?.join(', ') || 'general'}
-                  </p>
-                  <p className="mt-2 text-sm text-gray-600">
-                    Ambulance: {selectedIncident.assignedAmbulance?.vehicleNumber || 'Unknown'} {selectedIncident.assignedAmbulance?.type ? `(${selectedIncident.assignedAmbulance.type})` : ''}
-                  </p>
-                  <p className="mt-2 text-sm text-gray-600">
-                    Last vitals update: {selectedIncident.vitalsUpdatedAt ? new Date(selectedIncident.vitalsUpdatedAt).toLocaleTimeString() : 'Pending'}
-                  </p>
-                </div>
-
-                {selectedIncident.rerouteHistory?.length > 0 && (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                    <p className="text-sm font-bold text-amber-800">Reroute history</p>
-                    {selectedIncident.rerouteHistory.map((entry, index) => (
-                      <p key={`${entry.triggeredAt}-${index}`} className="mt-2 text-sm text-amber-700">
-                        {entry.reason} at {new Date(entry.triggeredAt).toLocaleTimeString()}
-                      </p>
-                    ))}
+              <div className="space-y-3">
+                {incomingPatients.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                    No incoming ambulances right now.
                   </div>
                 )}
+                {incomingPatients.map((incident) => (
+                  <button
+                    key={incident._id}
+                    onClick={() => setSelectedIncidentId(incident._id)}
+                    className={`w-full rounded-xl border p-4 text-left transition ${
+                      selectedIncident?._id === incident._id
+                        ? 'border-[#0f5c5a] bg-teal-50/60 ring-2 ring-[#0f5c5a]/15'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Siren className="h-4 w-4 text-rose-600" />
+                        <span className="text-sm font-bold text-slate-900">Ambulance inbound</span>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${
+                          incident.severityLevel === 'critical'
+                            ? 'bg-rose-100 text-rose-800'
+                            : incident.severityLevel === 'watch'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {incident.severityLevel || 'stable'}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {incident.symptoms || 'Symptoms pending from ambulance'}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      {incident.assignedAmbulance?.vehicleNumber || 'Ambulance'} · {getStatusGroup(incident)} · {incident.transportStatus || 'En route'}
+                    </p>
+                  </button>
+                ))}
               </div>
-            )}
-          </section>
+            </section>
+          </div>
+
+          <div className="space-y-6">
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="rounded-xl bg-sky-50 p-2.5">
+                  <MapIcon className="h-5 w-5 text-sky-700" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Live routing</h2>
+                  <p className="text-xs text-slate-500">Ambulance position to your facility</p>
+                </div>
+              </div>
+              <div className="h-[420px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                <LeafletMap
+                  origin={selectedIncident ? getIncidentOrigin(selectedIncident) : null}
+                  destination={hospitalLoc}
+                  strokeColor="#0f5c5a"
+                  originLabel="A"
+                  destLabel="H"
+                  height="420px"
+                />
+              </div>
+              <p className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-500">
+                <MapPin className="h-3.5 w-3.5 text-[#0f5c5a]" />
+                Route updates from the selected inbound case and latest streamed ambulance coordinates.
+              </p>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="rounded-xl bg-rose-50 p-2.5">
+                  <Activity className="h-5 w-5 text-rose-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">ER handoff panel</h2>
+                  <p className="text-xs text-slate-500">Vitals, requirements and specialist prep</p>
+                </div>
+              </div>
+
+              {!selectedIncident ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+                  Select an inbound case to view live vitals and preparation needs.
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase text-slate-500">SpO2</p>
+                      <p className={`text-xl font-bold ${Number(selectedIncident.vitals?.spo2) < 92 ? 'text-rose-600' : 'text-slate-900'}`}>
+                        {selectedIncident.vitals?.spo2 ?? '--'}%
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase text-slate-500">Heart rate</p>
+                      <p className="text-xl font-bold text-slate-900">{selectedIncident.vitals?.heartRate ?? '--'} bpm</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase text-slate-500">Blood pressure</p>
+                      <p className="text-xl font-bold text-slate-900">
+                        {selectedIncident.vitals?.systolicBP ?? '--'}/{selectedIncident.vitals?.diastolicBP ?? '--'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase text-slate-500">Arrival</p>
+                      <p className="text-lg font-bold text-teal-700">{selectedIncident.arrivalStatus || 'En route'}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                    <div className="mb-3 flex items-center gap-2">
+                      <HeartPulse className="h-5 w-5 text-rose-500" />
+                      <h3 className="text-base font-bold text-slate-900">Patient overview</h3>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      Symptoms: {selectedIncident.symptoms || 'Pending symptom update'}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Requirements: ICU {selectedIncident.requirements?.icuBeds || 0}, Ventilators {selectedIncident.requirements?.ventilators || 0}, General beds {selectedIncident.requirements?.generalBeds || 0}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Specialist needs: {selectedIncident.requirements?.specialists?.join(', ') || 'general'}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Ambulance: {selectedIncident.assignedAmbulance?.vehicleNumber || 'Unknown'} {selectedIncident.assignedAmbulance?.type ? `(${selectedIncident.assignedAmbulance.type})` : ''}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-500">
+                      Last vitals update: {selectedIncident.vitalsUpdatedAt ? new Date(selectedIncident.vitalsUpdatedAt).toLocaleTimeString() : 'Pending'}
+                    </p>
+                  </div>
+
+                  {selectedIncident.rerouteHistory?.length > 0 && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <p className="text-sm font-bold text-amber-900">Reroute history</p>
+                      {selectedIncident.rerouteHistory.map((entry, index) => (
+                        <p key={`${entry.triggeredAt}-${index}`} className="mt-2 text-sm text-amber-800">
+                          {entry.reason} at {new Date(entry.triggeredAt).toLocaleTimeString()}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

@@ -6,10 +6,9 @@ import * as SecureStore from 'expo-secure-store';
 // e.g. 'http://192.168.1.10:3000/api'
 // For Android emulator use: 'http://10.0.2.2:3000/api'
 // For iOS simulator use:    'http://localhost:3000/api'
+// Current LAN IP (must match Expo Metro / phone Wi‑Fi network)
 // ─────────────────────────────────────────────────────────────────────────────
-// export const API_URL = 'http://192.168.1.72:3000/api';
-
-export const API_URL = 'http://192.168.1.72:3000/api';
+export const API_URL = 'http://10.69.5.209:3000/api';
 
 const TOKEN_KEY = 'sanjeevan_token';
 

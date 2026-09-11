@@ -146,7 +146,37 @@ const incidentSchema = new mongoose.Schema({
 
     traumaSeverityAssessment: {
         type: String
-    }
+    },
+
+    timelineEvents: [
+        {
+            type: {
+                type: String,
+                enum: [
+                    'ambulance_called',
+                    'ambulance_dispatched',
+                    'en_route_hospital',
+                    'hospital_selected',
+                    'rerouted',
+                    'arrived_er',
+                    'er_handover',
+                ],
+                required: true,
+            },
+            label: {
+                type: String,
+                required: true,
+            },
+            at: {
+                type: Date,
+                default: Date.now,
+            },
+            meta: {
+                type: mongoose.Schema.Types.Mixed,
+                default: {},
+            },
+        },
+    ],
 
 }, { timestamps: true })
 

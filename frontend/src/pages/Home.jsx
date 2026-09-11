@@ -1,103 +1,133 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { HeartPulse, Ambulance, Building2 } from 'lucide-react'
+import { HeartPulse, Clock3, Hospital, Siren, ArrowRight, Users, Ambulance, Building2 } from 'lucide-react'
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.2 }
-  }
-}
+function SiteNav({ active }) {
+  const linkClass = (key) =>
+    `rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
+      active === key
+        ? 'bg-[#0f5c5a] text-white'
+        : 'text-slate-500 hover:bg-white hover:text-slate-800'
+    }`
 
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: { y: 0, opacity: 1, transition: { duration: 0.6, ease: "easeOut" } }
-}
-
-export default function Home() {
   return (
-    <div className="min-h-screen animated-bg flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-white/30 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-300/20 blur-3xl pointer-events-none" />
-
-      <motion.div 
-        className="z-10 text-center mb-16"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.7, ease: "easeOut" }}
-      >
-        <div className="flex items-center justify-center gap-3 mb-5">
-          <div className="bg-white p-3 rounded-2xl shadow-soft">
-            <HeartPulse className="text-blue-600 w-12 h-12 pulse-ring" />
+    <header className="relative z-10 border-b border-slate-200/80 bg-white/80 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <Link to="/" className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0f5c5a] text-white">
+            <HeartPulse className="h-5 w-5" />
           </div>
-          <h1 className="text-6xl font-extrabold text-white tracking-tight drop-shadow-md">
-            Sanjeevan
-          </h1>
-        </div>
-        <p className="text-white/95 text-xl font-medium max-w-lg mx-auto leading-relaxed drop-shadow-sm">
-          The ultimate platform connecting citizens, ambulances, and hospitals for rapid emergency response.
-        </p>
-      </motion.div>
+          <div>
+            <p className="text-base font-bold tracking-tight text-slate-900">Sanjeevan</p>
+            <p className="text-[11px] font-medium text-slate-500">Hospital navigation network</p>
+          </div>
+        </Link>
+        <nav className="flex items-center gap-1">
+          <Link to="/" className={linkClass('about')}>About</Link>
+          <Link to="/how-it-works" className={linkClass('how')}>How to use</Link>
+          <Link to="/portals" className={linkClass('portals')}>Portals</Link>
+        </nav>
+      </div>
+    </header>
+  )
+}
 
-      <motion.div 
-        className="z-10 grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-3xl"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <RoleCard 
-          icon={Ambulance}
-          title="Ambulance"
-          description="Receive critical alerts and navigate to emergencies efficiently."
-          path="/ambulance/login"
-          color="rose"
-        />
-        <RoleCard 
-          icon={Building2}
-          title="Hospital"
-          description="Manage inventory, incoming emergencies, and bed availability."
-          path="/hospital/login"
-          color="emerald"
-        />
-      </motion.div>
+function PageShell({ active, children }) {
+  return (
+    <div className="min-h-screen bg-[#f4f7f9] text-slate-900">
+      <SiteNav active={active} />
+      <main className="mx-auto max-w-6xl px-6 py-12">{children}</main>
     </div>
   )
 }
 
-function RoleCard({ icon: Icon, title, description, path, color }) {
-  const colorMap = {
-    blue: "text-blue-600 bg-blue-50/50",
-    rose: "text-rose-600 bg-rose-50/50",
-    emerald: "text-emerald-600 bg-emerald-50/50"
-  }
-
-  const borderMap = {
-    blue: "hover:border-blue-300",
-    rose: "hover:border-rose-300",
-    emerald: "hover:border-emerald-300"
-  }
-
+export default function Home() {
   return (
-    <motion.div variants={itemVariants} whileHover={{ y: -6, scale: 1.02 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
-      <Link to={path} className="block group h-full">
-        <div className={`glass-panel-light rounded-3xl p-8 h-full transition-all duration-300 shadow-soft group-hover:shadow-xl ${borderMap[color]}`}>
-          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-white ${colorMap[color]}`}>
-            <Icon className="w-8 h-8" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3 tracking-tight">{title}</h2>
-          <p className="text-gray-600 leading-relaxed font-medium mb-8">
-            {description}
-          </p>
-          <div className={`flex items-center text-sm font-bold ${colorMap[color].split(' ')[0]} transition-colors`}>
-            Get Started 
-            <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-          </div>
+    <PageShell active="about">
+      <section className="rounded-3xl border border-slate-200 bg-white px-8 py-10 shadow-sm md:px-12 md:py-14">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-700">About</p>
+        <h1 className="mt-3 max-w-3xl text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
+          Faster emergency care when minutes decide outcomes.
+        </h1>
+        <p className="mt-5 max-w-2xl text-base leading-relaxed text-slate-600 md:text-lg">
+          Patients, ambulances, and hospitals still operate in silos. Time is lost finding a hospital
+          with the right beds and specialists — while families wait without clear updates.
+        </p>
+      </section>
+
+      <section className="mt-10">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">What we work on</p>
+        <div className="grid gap-5 md:grid-cols-3">
+          {[
+            {
+              icon: Clock3,
+              title: 'The problem',
+              copy: 'Ambulances guess destinations, hospitals learn too late, and citizens cannot see what happens after help is called.',
+            },
+            {
+              icon: Siren,
+              title: 'What we built',
+              copy: 'One workflow for citizen reporting, dispatch, live vitals, hospital capacity, and ER handoff.',
+            },
+            {
+              icon: Hospital,
+              title: 'What we solve',
+              copy: 'Better hospital matching, inbound visibility for ER teams, and a documented trip from call to handover.',
+            },
+          ].map((item) => (
+            <article key={item.title} className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+                <item.icon className="h-5 w-5" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-900">{item.title}</h2>
+              <p className="mt-3 flex-1 text-sm leading-relaxed text-slate-600">{item.copy}</p>
+            </article>
+          ))}
         </div>
-      </Link>
-    </motion.div>
+      </section>
+
+      <section className="mt-12">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Who we serve</p>
+        <div className="grid gap-5 md:grid-cols-3">
+          {[
+            {
+              icon: Users,
+              title: 'Citizens',
+              copy: 'Report from the patient app, earn rewards, and open a trip report after the emergency is logged.',
+            },
+            {
+              icon: Ambulance,
+              title: 'Ambulance teams',
+              copy: 'Accept cases, stream vitals, and route to the hospital best able to stabilize the patient.',
+            },
+            {
+              icon: Building2,
+              title: 'Hospitals',
+              copy: 'See inbound ambulances early, keep inventory current, and prepare ER handoff with live data.',
+            },
+          ].map((item) => (
+            <article key={item.title} className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-[#0f5c5a]">
+                <item.icon className="h-5 w-5" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-900">{item.title}</h2>
+              <p className="mt-3 text-sm leading-relaxed text-slate-600">{item.copy}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-12 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+        <p className="text-sm font-medium text-slate-600">Next: step-by-step instructions for each role.</p>
+        <Link
+          to="/how-it-works"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#0f5c5a] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#0c4c4a]"
+        >
+          How to use <ArrowRight className="h-4 w-4" />
+        </Link>
+      </section>
+    </PageShell>
   )
 }
+
+export { PageShell, SiteNav }

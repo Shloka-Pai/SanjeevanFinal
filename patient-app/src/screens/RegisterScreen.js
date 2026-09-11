@@ -5,6 +5,7 @@ import {
   Platform, ScrollView, Alert,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from '../api/client';
 
 export default function RegisterScreen({ navigation }) {
   const { register } = useAuth();
@@ -22,7 +23,13 @@ export default function RegisterScreen({ navigation }) {
     try {
       await register(name.trim(), email.trim(), password);
     } catch (err) {
-      Alert.alert('Registration failed', err.response?.data?.message || 'Please try again.');
+      const networkHint = !err.response
+        ? `Cannot reach server at ${API_URL}. If your Wi‑Fi IP changed, update API_URL in src/api/client.js.`
+        : null;
+      Alert.alert(
+        'Registration failed',
+        err.response?.data?.message || networkHint || err.message || 'Please try again.',
+      );
     } finally {
       setLoading(false);
     }

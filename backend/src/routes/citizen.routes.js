@@ -17,5 +17,10 @@ router.post(
 router.post('/report-demo', authMiddleware, incidentController.reportDemoIncident)
 router.post('/translate-description', authMiddleware, incidentController.translateOperationalDetails)
 router.get('/history', authMiddleware, incidentController.getCitizenHistory)
+router.get('/active-trip', authMiddleware, incidentController.getActiveTrip)
+router.get('/reports/:id', authMiddleware, incidentController.getTripReport)
+router.get('/profile', authMiddleware, incidentController.getCitizenProfile)
+router.get('/leaderboard', authMiddleware, incidentController.getLeaderboard)
+router.post('/trip-assistant', authMiddleware, incidentController.tripAssistant)
 
 module.exports = router 

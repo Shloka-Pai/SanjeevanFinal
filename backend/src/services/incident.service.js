@@ -325,6 +325,7 @@ function buildIncidentRealtimePayload(incident) {
     selectedHospital: incident.selectedHospital,
     hospitalOptions,
     rerouteHistory: incident.rerouteHistory || [],
+    timelineEvents: incident.timelineEvents || [],
     createdAt: incident.createdAt,
     updatedAt: incident.updatedAt,
   }

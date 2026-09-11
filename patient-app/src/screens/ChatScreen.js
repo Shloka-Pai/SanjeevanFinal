@@ -7,7 +7,7 @@ import {
 const GEMINI_API_KEY = 'AIzaSyC8eENyHcposQ3g7l3FZH4gWgPVdOMZcy4';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-const SYSTEM_PROMPT = `You are Sanjeevan Health Assistant, a multilingual medical first-aid and health guidance chatbot for Indian citizens.
+const HEALTH_SYSTEM_PROMPT = `You are Sanjeevan Health Assistant, a multilingual medical first-aid and health guidance chatbot for Indian citizens.
 
 STRICT RULES:
 1. You ONLY answer health, medical, first-aid, symptoms, medicines, and emergency-related questions.
@@ -22,7 +22,7 @@ STRICT RULES:
 const WELCOME_MESSAGE = {
   id: 'welcome',
   role: 'bot',
-  text: '🩺 Namaste! I am Sanjeevan Health Assistant.\n\nI can help you with:\n• Symptoms & first aid\n• General health guidance\n• Medicine information\n• Emergency advice\n\nI support Hindi, Marathi, Tamil, Telugu, Bengali, Kannada, Malayalam, Gujarati, Punjabi & English.\n\n⚠️ I only answer health-related questions. Please consult a doctor for proper diagnosis.',
+  text: 'Namaste! I am Sanjeevan Health Assistant.\n\nI can help you with:\n• Symptoms & first aid\n• General health guidance\n• Medicine information\n• Emergency advice\n\nI support Hindi, Marathi, Tamil, Telugu, Bengali, Kannada, Malayalam, Gujarati, Punjabi & English.\n\nI only answer health-related questions. Please consult a doctor for proper diagnosis.',
 };
 
 export default function ChatScreen() {
@@ -42,20 +42,20 @@ export default function ChatScreen() {
     if (!text || loading) return;
 
     const userMsg = { id: Date.now().toString(), role: 'user', text };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setLoading(true);
 
     try {
       const history = messages
-        .filter(m => m.id !== 'welcome')
-        .map(m => ({
+        .filter((m) => m.id !== 'welcome')
+        .map((m) => ({
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.text }],
         }));
 
       const body = {
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        system_instruction: { parts: [{ text: HEALTH_SYSTEM_PROMPT }] },
         contents: [
           ...history,
           { role: 'user', parts: [{ text }] },
@@ -69,15 +69,17 @@ export default function ChatScreen() {
       });
 
       const data = await res.json();
-      if (data.error) {
-        console.error('Gemini API Error:', data.error);
-      }
-      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not process your request. Please try again.';
+      if (data.error) console.error('Gemini API Error:', data.error);
+      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text
+        || 'Sorry, I could not process your request. Please try again.';
 
-      setMessages(prev => [...prev, { id: Date.now().toString() + '_bot', role: 'bot', text: reply }]);
+      setMessages((prev) => [...prev, { id: `${Date.now()}_bot`, role: 'bot', text: reply }]);
     } catch (err) {
       console.error('Chat error:', err);
-      setMessages(prev => [...prev, { id: Date.now().toString() + '_err', role: 'bot', text: 'Network error. Please check your connection and try again.' }]);
+      setMessages((prev) => [
+        ...prev,
+        { id: `${Date.now()}_err`, role: 'bot', text: 'Network error. Please check your connection and try again.' },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -85,25 +87,17 @@ export default function ChatScreen() {
 
   const renderFormattedText = (text, isUser) => {
     if (!text) return null;
-
-    // Convert bullet point asterisks (*   or * ) into bullet symbols (• )
     const formattedText = text.replace(/^(\s*)\*\s+/gm, '$1• ');
-
-    // Split text by **bold** markdown tags
     const parts = formattedText.split(/(\*\*.*?\*\*)/g);
 
     return parts.map((part, index) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        const boldContent = part.slice(2, -2);
         return (
           <Text
             key={index}
-            style={[
-              styles.boldText,
-              isUser ? styles.userBoldText : styles.botBoldText,
-            ]}
+            style={[styles.boldText, isUser ? styles.userBoldText : styles.botBoldText]}
           >
-            {boldContent}
+            {part.slice(2, -2)}
           </Text>
         );
       }
@@ -113,7 +107,7 @@ export default function ChatScreen() {
 
   const renderItem = ({ item }) => (
     <View style={[styles.bubble, item.role === 'user' ? styles.userBubble : styles.botBubble]}>
-      {item.role === 'bot' && <Text style={styles.botLabel}>🩺 Sanjeevan</Text>}
+      {item.role === 'bot' && <Text style={styles.botLabel}>Health Assistant</Text>}
       <Text style={item.role === 'user' ? styles.userText : styles.botText}>
         {renderFormattedText(item.text, item.role === 'user')}
       </Text>
@@ -126,7 +120,7 @@ export default function ChatScreen() {
         <View style={styles.headerIcon}>
           <Text style={styles.headerIconText}>🩺</Text>
         </View>
-        <View>
+        <View style={styles.headerTextWrap}>
           <Text style={styles.headerTitle}>Health Assistant</Text>
           <Text style={styles.headerSub}>Multilingual · Healthcare only</Text>
         </View>
@@ -141,7 +135,7 @@ export default function ChatScreen() {
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
@@ -149,7 +143,7 @@ export default function ChatScreen() {
 
         {loading && (
           <View style={styles.typingRow}>
-            <ActivityIndicator size="small" color="#1d4ed8" />
+            <ActivityIndicator size="small" color="#0f766e" />
             <Text style={styles.typingText}>Sanjeevan is thinking...</Text>
           </View>
         )}
@@ -175,7 +169,7 @@ export default function ChatScreen() {
         </View>
 
         <Text style={styles.disclaimer}>
-          ⚠️ Not a substitute for professional medical advice. Always consult a doctor.
+          Not a substitute for professional medical advice. Always consult a doctor.
         </Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -188,19 +182,17 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#1d4ed8', paddingHorizontal: 16, paddingVertical: 14,
+    backgroundColor: '#0f766e', paddingHorizontal: 16, paddingVertical: 14,
   },
   headerIcon: {
     width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 12, justifyContent: 'center', alignItems: 'center',
   },
   headerIconText: { fontSize: 20 },
+  headerTextWrap: { flex: 1 },
   headerTitle: { fontSize: 16, fontWeight: '800', color: '#fff' },
-  headerSub: { fontSize: 11, color: '#bfdbfe', fontWeight: '500' },
-  liveDot: {
-    marginLeft: 'auto', width: 10, height: 10,
-    borderRadius: 5, backgroundColor: '#4ade80',
-  },
+  headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: '500' },
+  liveDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#4ade80' },
 
   list: { padding: 16, paddingBottom: 8 },
 
@@ -208,7 +200,7 @@ const styles = StyleSheet.create({
     maxWidth: '82%', borderRadius: 18, padding: 12, marginBottom: 10,
   },
   userBubble: {
-    alignSelf: 'flex-end', backgroundColor: '#1d4ed8',
+    alignSelf: 'flex-end', backgroundColor: '#0f766e',
     borderBottomRightRadius: 4,
   },
   botBubble: {
@@ -216,7 +208,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 4,
     shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
   },
-  botLabel: { fontSize: 10, fontWeight: '700', color: '#1d4ed8', marginBottom: 4 },
+  botLabel: { fontSize: 10, fontWeight: '700', color: '#0f766e', marginBottom: 4 },
   userText: { fontSize: 14, color: '#fff', lineHeight: 20 },
   botText: { fontSize: 14, color: '#1e293b', lineHeight: 20 },
   boldText: { fontWeight: '700' },
@@ -243,7 +235,7 @@ const styles = StyleSheet.create({
   },
   sendBtn: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#1d4ed8', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: '#0f766e', justifyContent: 'center', alignItems: 'center',
   },
   sendBtnDisabled: { backgroundColor: '#cbd5e1' },
   sendBtnText: { color: '#fff', fontSize: 16 },

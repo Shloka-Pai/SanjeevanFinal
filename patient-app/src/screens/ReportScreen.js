@@ -6,6 +6,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
 import api from '../api/client';
 
 const SPEECH_LANGUAGES = [
@@ -24,6 +25,7 @@ const SPEECH_LANGUAGES = [
 
 export default function ReportScreen() {
   const { user, logout } = useAuth();
+  const navigation = useNavigation();
   const [image, setImage] = useState(null); // { uri, type, name }
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
@@ -102,23 +104,36 @@ export default function ReportScreen() {
             <Text style={styles.iconText}>🛡️</Text>
           </View>
           <View>
+            <Text style={styles.brand}>Sanjeevan</Text>
             <Text style={styles.userName}>{user?.name}</Text>
-            <Text style={styles.userRole}>Citizen Dashboard</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
-          <View style={styles.pointsBadge}>
+          <TouchableOpacity style={styles.pointsBadge} onPress={() => navigation.navigate('Profile')}>
             <Text style={styles.pointsText}>🏆 {points} pts</Text>
-          </View>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
       </View>
 
+      <View style={styles.navHints}>
+        <TouchableOpacity style={styles.navHint} onPress={() => navigation.navigate('History')}>
+          <Text style={styles.navHintText}>Trip reports</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navHint} onPress={() => navigation.navigate('Health')}>
+          <Text style={styles.navHintText}>Health chat</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navHint} onPress={() => navigation.navigate('Profile')}>
+          <Text style={styles.navHintText}>Rank & rewards</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Dispatch Card */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>🚨 Dispatch Emergency</Text>
+        <Text style={styles.cardTitle}>Dispatch Emergency</Text>
+        <Text style={styles.cardSub}>Capture the scene, confirm GPS, then send help.</Text>
 
         {!!errorMsg && (
           <View style={styles.errorBox}>
@@ -201,23 +216,28 @@ export default function ReportScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f8fafc' },
+  screen: { flex: 1, backgroundColor: '#f1f5f9' },
   content: { padding: 16, paddingBottom: 32, paddingTop: 48 },
 
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, backgroundColor: '#fff', borderRadius: 16, padding: 14, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, backgroundColor: '#0f766e', borderRadius: 18, padding: 14 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  iconBox: { width: 40, height: 40, backgroundColor: '#1d4ed8', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  iconBox: { width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   iconText: { fontSize: 20 },
-  userName: { fontSize: 16, fontWeight: '800', color: '#1e293b' },
-  userRole: { fontSize: 11, color: '#64748b', fontWeight: '600' },
+  brand: { fontSize: 11, fontWeight: '800', color: '#99f6e4', letterSpacing: 0.8 },
+  userName: { fontSize: 16, fontWeight: '800', color: '#fff' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  pointsBadge: { backgroundColor: '#ecfdf5', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#d1fae5' },
-  pointsText: { fontSize: 12, fontWeight: '700', color: '#059669' },
-  logoutBtn: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
-  logoutText: { fontSize: 12, fontWeight: '700', color: '#64748b' },
+  pointsBadge: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  pointsText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  logoutBtn: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
+  logoutText: { fontSize: 12, fontWeight: '700', color: '#ecfdf5' },
 
-  card: { backgroundColor: '#fff', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12, elevation: 4 },
-  cardTitle: { fontSize: 20, fontWeight: '800', color: '#1e293b', marginBottom: 16 },
+  navHints: { flexDirection: 'row', gap: 8, marginBottom: 14, flexWrap: 'wrap' },
+  navHint: { backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: '#a7f3d0' },
+  navHintText: { fontSize: 12, fontWeight: '700', color: '#0f766e' },
+
+  card: { backgroundColor: '#fff', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12, elevation: 4, borderWidth: 1, borderColor: '#e2e8f0' },
+  cardTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  cardSub: { fontSize: 13, color: '#64748b', marginTop: 4, marginBottom: 16, lineHeight: 18 },
 
   errorBox: { backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 12, padding: 12, marginBottom: 12 },
   errorText: { color: '#be123c', fontSize: 13, fontWeight: '600' },
@@ -232,17 +252,17 @@ const styles = StyleSheet.create({
   imagePlaceholderText: { fontSize: 14, fontWeight: '600', color: '#475569' },
   imagePlaceholderSub: { fontSize: 11, color: '#94a3b8', marginTop: 2 },
 
-  gpsBox: { backgroundColor: '#fffbeb', borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#fef3c7' },
-  gpsTitle: { fontSize: 13, fontWeight: '700', color: '#92400e', marginBottom: 4 },
-  gpsText: { fontSize: 12, color: '#b45309', lineHeight: 18 },
+  gpsBox: { backgroundColor: '#ecfdf5', borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#a7f3d0' },
+  gpsTitle: { fontSize: 13, fontWeight: '700', color: '#065f46', marginBottom: 4 },
+  gpsText: { fontSize: 12, color: '#047857', lineHeight: 18 },
 
   textarea: { borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12, padding: 14, fontSize: 14, color: '#1e293b', minHeight: 90, textAlignVertical: 'top', marginBottom: 16, backgroundColor: '#f8fafc' },
 
   btnRow: { flexDirection: 'row', gap: 12 },
   dispatchBtn: { flex: 1, height: 80, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  normalBtn: { borderWidth: 2, borderColor: '#1d4ed8', backgroundColor: '#fff' },
-  normalBtnText: { fontSize: 16, fontWeight: '800', color: '#1d4ed8' },
-  normalBtnSub: { fontSize: 10, fontWeight: '700', color: '#3b82f6', marginTop: 2 },
+  normalBtn: { borderWidth: 2, borderColor: '#0f766e', backgroundColor: '#fff' },
+  normalBtnText: { fontSize: 16, fontWeight: '800', color: '#0f766e' },
+  normalBtnSub: { fontSize: 10, fontWeight: '700', color: '#14b8a6', marginTop: 2 },
   emergencyBtn: { backgroundColor: '#dc2626', shadowColor: '#dc2626', shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
   emergencyBtnText: { fontSize: 16, fontWeight: '800', color: '#fff' },
   emergencyBtnSub: { fontSize: 9, fontWeight: '800', color: '#fecaca', marginTop: 2, letterSpacing: 1 },

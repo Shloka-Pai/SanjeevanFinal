@@ -2,6 +2,8 @@ import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import Home from './pages/Home'
+import HowItWorks from './pages/HowItWorks'
+import Portals from './pages/Portals'
 
 // Auth Pages
 import CitizenAuth from './pages/citizen/CitizenAuth'
@@ -19,6 +21,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/portals" element={<Portals />} />
           
           {/* Citizen Routes */}
           <Route path="/citizen/login" element={<CitizenAuth mode="login" />} />

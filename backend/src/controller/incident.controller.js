@@ -4,6 +4,9 @@ const storageService = require("../services/storage.service");
 const { v4: uuid } = require("uuid");
 const { getIO } = require('../socket');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const {
+  buildTripContextSummary,
+} = require('../services/timeline.service');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -252,7 +255,14 @@ async function reportIncident(req, res) {
       description,
 
       isHighSeverityTrauma,
-      traumaSeverityAssessment
+      traumaSeverityAssessment,
+
+      timelineEvents: [{
+        type: 'ambulance_called',
+        label: 'Ambulance called',
+        at: new Date(),
+        meta: { aidType },
+      }],
     });
 
 
@@ -380,6 +390,13 @@ async function reportDemoIncident(req, res) {
 
       traumaSeverityAssessment:
         "Demo incident created without AI validation.",
+
+      timelineEvents: [{
+        type: 'ambulance_called',
+        label: 'Ambulance called',
+        at: new Date(),
+        meta: { aidType, demo: true },
+      }],
     });
 
 
@@ -616,6 +633,342 @@ async function translateOperationalDetails(req, res) {
 
 
 // ============================================================
+// CITIZEN ACTIVE TRIP + TIMELINE
+// ============================================================
+
+async function loadCitizenIncident(citizenId, incidentId) {
+  const query = incidentId
+    ? { _id: incidentId, reportedBy: citizenId }
+    : { reportedBy: citizenId };
+
+  let incident = await incidentModel
+    .findOne(incidentId ? query : { ...query, status: { $ne: 'completed' } })
+    .sort({ createdAt: -1 })
+    .populate('assignedAmbulance', 'vehicleNumber type status')
+    .populate('assignedHospital', 'name status location')
+    .populate('selectedHospital', 'name status location');
+
+  if (!incident && !incidentId) {
+    incident = await incidentModel
+      .findOne({ reportedBy: citizenId })
+      .sort({ createdAt: -1 })
+      .populate('assignedAmbulance', 'vehicleNumber type status')
+      .populate('assignedHospital', 'name status location')
+      .populate('selectedHospital', 'name status location');
+  }
+
+  return incident;
+}
+
+async function getActiveTrip(req, res) {
+  try {
+    const incident = await loadCitizenIncident(req.user.id, req.query.incidentId);
+
+    if (!incident) {
+      return res.status(404).json({
+        message: 'No trip found for this account yet.',
+        trip: null,
+      });
+    }
+
+    const { timeline, phase, summaryText } = buildTripContextSummary(incident);
+
+    return res.status(200).json({
+      trip: {
+        _id: incident._id,
+        aidType: incident.aidType,
+        status: incident.status,
+        transportStatus: incident.transportStatus,
+        arrivalStatus: incident.arrivalStatus,
+        severityLevel: incident.severityLevel,
+        description: incident.description,
+        createdAt: incident.createdAt,
+        updatedAt: incident.updatedAt,
+        phase,
+        ambulance: incident.assignedAmbulance
+          ? {
+              vehicleNumber: incident.assignedAmbulance.vehicleNumber,
+              type: incident.assignedAmbulance.type,
+            }
+          : null,
+        hospital: (incident.assignedHospital || incident.selectedHospital)
+          ? {
+              name: (incident.assignedHospital || incident.selectedHospital).name,
+              status: (incident.assignedHospital || incident.selectedHospital).status,
+            }
+          : null,
+        timeline,
+        summaryText,
+      },
+    });
+  } catch (err) {
+    console.error('getActiveTrip error:', err);
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+async function getTripReport(req, res) {
+  try {
+    const incident = await loadCitizenIncident(req.user.id, req.params.id);
+
+    if (!incident) {
+      return res.status(404).json({ message: 'Trip report not found for this account.' });
+    }
+
+    const citizen = await citizenModel.findById(req.user.id).select('name email');
+    const { timeline, phase, summaryText } = buildTripContextSummary(incident);
+    const hospital = incident.assignedHospital || incident.selectedHospital;
+    const ambulance = incident.assignedAmbulance;
+
+    const calledEvent = timeline.find((event) => event.type === 'ambulance_called');
+    const dispatchedEvent = timeline.find((event) => event.type === 'ambulance_dispatched');
+    const arrivedEvent = timeline.find((event) => event.type === 'arrived_er');
+    const handoverEvent = timeline.find((event) => event.type === 'er_handover');
+
+    const report = {
+      reportId: `SJ-${String(incident._id).slice(-8).toUpperCase()}`,
+      generatedAt: new Date().toISOString(),
+      generatedAtFormatted: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      title: 'Sanjeevan Emergency Trip Documentation',
+      reporter: {
+        name: citizen?.name || 'Citizen',
+        email: citizen?.email || '',
+      },
+      incident: {
+        id: incident._id,
+        aidType: incident.aidType,
+        status: incident.status,
+        transportStatus: incident.transportStatus,
+        arrivalStatus: incident.arrivalStatus,
+        severityLevel: incident.severityLevel,
+        description: incident.description || 'No operational description recorded.',
+        phase,
+        location: incident.location,
+        image: incident.image,
+        createdAt: incident.createdAt,
+        updatedAt: incident.updatedAt,
+      },
+      ambulance: ambulance
+        ? {
+            vehicleNumber: ambulance.vehicleNumber,
+            type: ambulance.type,
+            status: ambulance.status,
+          }
+        : null,
+      hospital: hospital
+        ? {
+            name: hospital.name,
+            status: hospital.status,
+          }
+        : null,
+      vitals: incident.vitals || null,
+      vitalsUpdatedAt: incident.vitalsUpdatedAt,
+      timeline,
+      milestones: {
+        ambulanceCalledAt: calledEvent?.atFormatted || null,
+        ambulanceDispatchedAt: dispatchedEvent?.atFormatted || null,
+        arrivedErAt: arrivedEvent?.atFormatted || null,
+        erHandoverAt: handoverEvent?.atFormatted || null,
+      },
+      summaryText,
+      documentText: [
+        '═══════════════════════════════════════',
+        '  SANJEEVAN — EMERGENCY TRIP REPORT',
+        '═══════════════════════════════════════',
+        `Report ID: SJ-${String(incident._id).slice(-8).toUpperCase()}`,
+        `Generated: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`,
+        '',
+        `Reporter: ${citizen?.name || 'Citizen'}`,
+        `Aid type: ${incident.aidType}`,
+        `Current phase: ${phase}`,
+        `Status: ${incident.status} / ${incident.transportStatus || 'n/a'} / ${incident.arrivalStatus || 'n/a'}`,
+        '',
+        '── KEY MILESTONES ──',
+        `Ambulance called:     ${calledEvent?.atFormatted || 'Pending'}`,
+        `Ambulance dispatched: ${dispatchedEvent?.atFormatted || 'Pending'}`,
+        `Arrived at ER:        ${arrivedEvent?.atFormatted || 'Pending'}`,
+        `ER handover:          ${handoverEvent?.atFormatted || 'Pending'}`,
+        '',
+        `Ambulance: ${ambulance?.vehicleNumber || 'Not assigned'}${ambulance?.type ? ` (${ambulance.type})` : ''}`,
+        `Hospital:  ${hospital?.name || 'Not assigned'}`,
+        '',
+        '── FULL TIMELINE ──',
+        ...timeline.map((event, index) => `${index + 1}. ${event.label} — ${event.atFormatted}`),
+        '',
+        `Notes: ${incident.description || 'None'}`,
+        '═══════════════════════════════════════',
+        'Generated by Sanjeevan Hospital Navigation',
+      ].join('\n'),
+    };
+
+    return res.status(200).json({ report });
+  } catch (err) {
+    console.error('getTripReport error:', err);
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+async function getCitizenProfile(req, res) {
+  try {
+    const citizen = await citizenModel
+      .findById(req.user.id)
+      .select('name email totalRewardPoints rewardHistory createdAt');
+
+    if (!citizen) {
+      return res.status(404).json({ message: 'Citizen not found' });
+    }
+
+    const higherCount = await citizenModel.countDocuments({
+      totalRewardPoints: { $gt: citizen.totalRewardPoints || 0 },
+    });
+    const totalCitizens = await citizenModel.countDocuments();
+    const rank = higherCount + 1;
+    const reportsCount = await incidentModel.countDocuments({ reportedBy: req.user.id });
+
+    return res.status(200).json({
+      profile: {
+        id: citizen._id,
+        name: citizen.name,
+        email: citizen.email,
+        totalRewardPoints: citizen.totalRewardPoints || 0,
+        rewardHistory: [...(citizen.rewardHistory || [])].reverse(),
+        memberSince: citizen.createdAt,
+        reportsCount,
+        rank,
+        totalCitizens,
+        percentile:
+          totalCitizens > 0
+            ? Math.max(1, Math.round(((totalCitizens - rank + 1) / totalCitizens) * 100))
+            : 100,
+      },
+    });
+  } catch (err) {
+    console.error('getCitizenProfile error:', err);
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+async function getLeaderboard(req, res) {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 50);
+    const leaders = await citizenModel
+      .find({})
+      .select('name totalRewardPoints createdAt')
+      .sort({ totalRewardPoints: -1, createdAt: 1 })
+      .limit(limit);
+
+    const me = await citizenModel.findById(req.user.id).select('name totalRewardPoints');
+    const higherCount = me
+      ? await citizenModel.countDocuments({
+          totalRewardPoints: { $gt: me.totalRewardPoints || 0 },
+        })
+      : 0;
+
+    return res.status(200).json({
+      leaders: leaders.map((citizen, index) => ({
+        rank: index + 1,
+        id: citizen._id,
+        name: citizen.name,
+        totalRewardPoints: citizen.totalRewardPoints || 0,
+        isYou: String(citizen._id) === String(req.user.id),
+      })),
+      yourRank: me ? higherCount + 1 : null,
+      yourPoints: me?.totalRewardPoints || 0,
+    });
+  } catch (err) {
+    console.error('getLeaderboard error:', err);
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+async function tripAssistant(req, res) {
+  try {
+    const { message, incidentId, history } = req.body || {};
+    const question = String(message || '').trim();
+
+    if (!question) {
+      return res.status(400).json({ message: 'Message is required.' });
+    }
+
+    const incident = await loadCitizenIncident(req.user.id, incidentId);
+
+    if (!incident) {
+      return res.status(200).json({
+        reply:
+          'I could not find any ambulance trip linked to your account yet. Report an emergency from the Report tab, then ask me again about call time, dispatch, ER arrival, or handover.',
+        trip: null,
+        timeline: [],
+      });
+    }
+
+    const { timeline, phase, summaryText } = buildTripContextSummary(incident);
+
+    const systemPrompt = [
+      'You are Sanjeevan Trip Assistant — an agentic AI that explains a citizen\'s live ambulance / ER journey.',
+      'Use ONLY the trip context below. Do not invent times, hospitals, or statuses.',
+      'Answer clearly about: when ambulance was called, dispatched, en route, arrived at ER, and ER handover.',
+      'If a milestone has not happened yet, say so plainly and state the current phase.',
+      'Respond in the same language the user writes in (Hindi, Marathi, English, or other Indian languages).',
+      'Keep answers concise (4–8 short sentences or a short bullet list). Be calm and helpful.',
+      'If asked about medical advice unrelated to this trip, briefly say you can help with trip status, and suggest the Health Assistant mode for medical questions.',
+      '',
+      '=== LIVE TRIP CONTEXT ===',
+      summaryText,
+      '=== END CONTEXT ===',
+    ].join('\n');
+
+    const chatHistory = Array.isArray(history)
+      ? history
+          .slice(-8)
+          .filter((item) => item && item.role && item.text)
+          .map((item) => ({
+            role: item.role === 'user' ? 'user' : 'model',
+            parts: [{ text: String(item.text) }],
+          }))
+      : [];
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction: systemPrompt,
+      generationConfig: {
+        maxOutputTokens: 700,
+        temperature: 0.3,
+      },
+    });
+
+    const chat = model.startChat({ history: chatHistory });
+    const result = await chat.sendMessage(question);
+    const reply =
+      result?.response?.text()?.trim() ||
+      'I could not generate a trip update right now. Please try again in a moment.';
+
+    return res.status(200).json({
+      reply,
+      trip: {
+        _id: incident._id,
+        phase,
+        status: incident.status,
+        transportStatus: incident.transportStatus,
+        arrivalStatus: incident.arrivalStatus,
+      },
+      timeline,
+    });
+  } catch (err) {
+    console.error('tripAssistant error:', err);
+
+    if (err?.status === 429) {
+      return res.status(429).json({
+        message: 'Trip assistant is briefly rate-limited. Please retry in a few seconds.',
+      });
+    }
+
+    return res.status(502).json({
+      message: 'Trip assistant is unavailable right now. Please try again shortly.',
+    });
+  }
+}
+
+// ============================================================
 // EXPORTS
 // ============================================================
 
@@ -623,5 +976,10 @@ module.exports = {
   reportIncident,
   reportDemoIncident,
   getCitizenHistory,
-  translateOperationalDetails
+  translateOperationalDetails,
+  getActiveTrip,
+  getTripReport,
+  getCitizenProfile,
+  getLeaderboard,
+  tripAssistant,
 };

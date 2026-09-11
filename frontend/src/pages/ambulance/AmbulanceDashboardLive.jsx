@@ -162,76 +162,87 @@ export default function AmbulanceDashboardLive() {
       }
       setAmbulanceLocation(location)
       try {
-        await axios.post(`${API_URL}/ambulance/location`, {
-          lat: location.lat,
-          lng: location.lng,
-          incidentId: activeIncidentRef.current?._id,
-        })
+        await axios.put(`${API_URL}/ambulance/location`, { location })
       } catch (error) {
-        console.error('Live location sync failed', error)
+        console.error('Failed updating ambulance location', error)
       }
     }
-    navigator.geolocation.getCurrentPosition(syncLocation, () => {}, { enableHighAccuracy: true, timeout: 10000 })
-    const watchId = navigator.geolocation.watchPosition(syncLocation, () => {}, { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 })
+    navigator.geolocation.getCurrentPosition(syncLocation, () => {}, { enableHighAccuracy: true })
+    const watchId = navigator.geolocation.watchPosition(syncLocation, () => {}, { enableHighAccuracy: true, distanceFilter: 10 })
     return () => navigator.geolocation.clearWatch(watchId)
   }, [API_URL])
 
   useEffect(() => {
     if (!ambulanceUserId) return undefined
     const socket = io('http://localhost:3000', { withCredentials: true })
-    socket.emit('join', 'ambulance')
     socket.emit('join', `ambulance_${ambulanceUserId}`)
-    socket.on('incoming_incident', (incident) => {
-      setIncidents((prev) => [incident, ...prev.filter((item) => item._id !== incident._id)])
+
+    socket.on('incident_created', (data) => {
+      if (data?.incident) {
+        setIncidents((prev) => [data.incident, ...prev.filter((item) => item._id !== data.incident._id)])
+      }
     })
-    socket.on('incident_taken', ({ incidentId }) => {
-      setIncidents((prev) => prev.filter((incident) => incident._id !== incidentId))
+
+    socket.on('ambulance_accepted', (data) => {
+      if (data?.incident) {
+        setIncidents((prev) => prev.filter((item) => item._id !== data.incident._id))
+        syncMissionState(data.incident)
+      }
     })
-    socket.on('ambulance_case_update', ({ incident, rerouted, reason }) => {
-      if (incident.status === 'completed') return
-      setRecentIncidents((prev) => [incident, ...prev.filter((item) => item._id !== incident._id)].slice(0, 10))
-      syncMissionState(incident)
-      if (rerouted && reason) setRouteAlert(reason)
+
+    socket.on('patient_rerouted', ({ incident, reason }) => {
+      if (incident?._id === activeIncidentRef.current?._id) {
+        syncMissionState(incident, incident.assignedHospital)
+        setRouteAlert(reason || 'Patient rerouted due to hospital inventory limits.')
+      }
     })
+
     return () => socket.disconnect()
   }, [ambulanceUserId])
 
   useEffect(() => {
-    if (!activeIncident?._id || !selectedHospital?.hospitalId) { setStreaming(false); return undefined }
-    setStreaming(true)
-    const intervalId = window.setInterval(async () => {
-      const nextVitals = buildRandomVitals(vitalsRef.current, activeIncidentRef.current?.severityLevel)
-      setVitals(nextVitals)
+    if (!activeIncident?._id) return undefined
+    const interval = setInterval(async () => {
+      const currentAcc = activeIncidentRef.current
+      if (!currentAcc?._id) return
+      setStreaming(true)
+      const next = buildRandomVitals(vitalsRef.current, currentAcc.severityLevel)
+      vitalsRef.current = next
+      setVitals(next)
+
       try {
         const response = await axios.post(`${API_URL}/ambulance/stream-vitals`, {
-          incidentId: activeIncidentRef.current._id,
-          vitals: nextVitals,
-          ambulanceLocation: ambulanceLocationRef.current || mapOrigin,
+          incidentId: currentAcc._id,
+          vitals: next,
+          ambulanceLocation: ambulanceLocationRef.current,
         })
-        setActiveIncident(response.data.incident)
-        if (response.data.incident?.status === 'completed') return
-        const nextSelectedHospital = normalizeHospital(
-          response.data.selectedHospital || response.data.incident.assignedHospital,
-          response.data.incident.hospitalOptions || [],
-        )
-        setSelectedHospital(nextSelectedHospital)
-        if (response.data.rerouted && response.data.reason) setRouteAlert(response.data.reason)
+        if (response.data?.incident) {
+          const updated = response.data.incident
+          setActiveIncident(updated)
+          activeIncidentRef.current = updated
+
+          if (response.data.rerouted && response.data.newHospital) {
+            const nextHospital = normalizeHospital(response.data.newHospital, updated.hospitalOptions || [])
+            setSelectedHospital(nextHospital)
+            setRouteAlert(response.data.reason || 'Auto-rerouted: Assigned hospital can no longer handle patient vitals.')
+          }
+        }
       } catch (error) {
-        console.error('Vitals streaming failed', error)
+        console.error('Failed streaming vitals to backend', error)
       }
-    }, 3000)
-    return () => window.clearInterval(intervalId)
-  }, [API_URL, activeIncident?._id, mapOrigin, selectedHospital?.hospitalId])
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [API_URL, activeIncident?._id])
 
   const handleAccept = async (incident) => {
     try {
       setLoading(true)
       const response = await axios.post(`${API_URL}/ambulance/accept-incident`, { incidentId: incident._id })
-      syncMissionState(response.data.incident, response.data.allocatedHospital)
       setIncidents((prev) => prev.filter((item) => item._id !== incident._id))
-      setRouteAlert('')
+      syncMissionState(response.data.incident)
     } catch (error) {
-      alert('Failed to accept the request. Another ambulance may have taken it.')
+      alert('Failed accepting request.')
     } finally {
       setLoading(false)
     }
@@ -239,40 +250,48 @@ export default function AmbulanceDashboardLive() {
 
   const handleVitalsSubmit = async (event) => {
     event.preventDefault()
+    if (!activeIncident) return
     try {
       setLoading(true)
-      const response = await axios.post(`${API_URL}/ambulance/predict-allocation`, {
+      const response = await axios.post(`${API_URL}/ambulance/rank-hospitals`, {
         incidentId: activeIncident._id,
-        vitals: {
-          ...vitals,
-          heartRate: Number(vitals.heartRate),
-          systolicBP: Number(vitals.systolicBP),
-          diastolicBP: Number(vitals.diastolicBP),
-          spo2: Number(vitals.spo2),
-          temperature: Number(vitals.temperature),
-        },
+        vitals,
+        symptoms: vitals.symptoms,
       })
-      syncMissionState(response.data.incident, response.data.bestHospital)
-      setHospitalOptions(response.data.availableHospitals || [])
-      setBestHospital(response.data.bestHospital || null)
-      setSelectedHospital(response.data.bestHospital || null)
-      setRouteAlert('')
+
+      const updatedIncident = response.data.incident
+      const options = response.data.hospitalOptions || []
+      const recommended = response.data.recommendedHospital || options.find((opt) => opt.isBestMatch) || null
+      setActiveIncident(updatedIncident)
+      activeIncidentRef.current = updatedIncident
+      setHospitalOptions(options)
+      setBestHospital(recommended)
+      if (recommended) handleSelectHospital(recommended.hospitalId, updatedIncident, options)
     } catch (error) {
-      alert('Failed to rank hospitals for this patient.')
+      alert('Failed to rank hospitals.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSelectHospital = async (hospitalId) => {
+  const handleSelectHospital = async (hospitalId, incident = activeIncident, options = hospitalOptions) => {
+    if (!incident?._id) return
     try {
       setLoading(true)
-      const response = await axios.post(`${API_URL}/ambulance/select-hospital`, { incidentId: activeIncident._id, hospitalId })
-      syncMissionState(response.data.incident, response.data.selectedHospital)
-      setSelectedHospital(response.data.selectedHospital)
+      const response = await axios.post(`${API_URL}/ambulance/select-hospital`, {
+        incidentId: incident._id,
+        hospitalId,
+      })
+
+      const updatedIncident = response.data.incident
+      const targetHospital = options.find((opt) => opt.hospitalId === hospitalId) || response.data.assignedHospital
+      const normalizedTarget = normalizeHospital(targetHospital, options)
+      setActiveIncident(updatedIncident)
+      activeIncidentRef.current = updatedIncident
+      setSelectedHospital(normalizedTarget)
       setRouteAlert('')
     } catch (error) {
-      alert('Failed to switch hospital destination.')
+      alert('Failed selecting hospital.')
     } finally {
       setLoading(false)
     }
@@ -305,82 +324,111 @@ export default function AmbulanceDashboardLive() {
   }
 
   if (authLoading && !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#E8F4FD' }}>
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" style={{ borderColor: '#168A55', borderTopColor: 'transparent' }} />
-      </div>
-    )
+    return <div className="min-h-screen bg-[#f4f7f9]" />
   }
 
   if (!user || user.role !== 'ambulance') return <Navigate to="/ambulance/login" replace />
 
   return (
-    <div className="amb-bg p-4 md:p-6 pb-20">
-      <div className="mx-auto max-w-7xl space-y-5">
-
-        {/* ── HEADER ── */}
-        <header className="amb-card-primary flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+    <div className="min-h-screen bg-[#f4f7f9] pb-16 text-slate-900">
+      <header className="sticky top-0 z-50 mb-6 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-4">
-            <div className="rounded-2xl p-3.5 text-white shadow-md" style={{ background: '#168A55' }}>
-              <Ambulance className="h-6 w-6" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#0f5c5a] text-white shadow-sm">
+              <Ambulance className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#0F9D9A' }}>Active Unit</p>
-              <h1 className="text-xl font-extrabold tracking-tight" style={{ color: '#172B3A' }}>Unit {user.vehicleNumber}</h1>
-              <p className="text-xs font-medium" style={{ color: '#607080' }}>Dispatch · Triage · Routing · Live Handoff</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold tracking-tight text-slate-900">Unit {user.vehicleNumber}</h1>
+                <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-sky-100">
+                  Ambulance portal
+                </span>
+              </div>
+              <p className="text-xs font-medium text-slate-500">
+                Sanjeevan · Dispatch, triage, routing & hospital handoff
+              </p>
             </div>
           </div>
-          <button
-            onClick={logout}
-            className="rounded-xl px-5 py-2.5 text-sm font-bold transition hover:opacity-80"
-            style={{ background: 'rgba(255,255,255,0.7)', border: '1.5px solid rgba(96,112,128,0.25)', color: '#607080' }}
-          >
-            End Shift
-          </button>
-        </header>
+          <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100 sm:flex">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              {activeIncident ? 'Mission active' : 'On standby'}
+            </div>
+            <button
+              onClick={logout}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              End shift
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-7xl space-y-6 px-6">
+        {!activeIncident && (
+          <section className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pending requests</p>
+              <p className="mt-2 text-3xl font-bold text-slate-900">{incidents.length}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recent missions</p>
+              <p className="mt-2 text-3xl font-bold text-slate-900">{recentIncidents.length}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Unit status</p>
+              <p className="mt-2 text-lg font-bold text-teal-700">Ready for dispatch</p>
+            </div>
+          </section>
+        )}
 
         {/* ── DISPATCH RADAR ── */}
         {!activeIncident && (
-          <section className="amb-card-primary p-6 md:p-8">
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
             <div className="mb-6 flex items-center gap-3">
-              <div className="rounded-xl p-2" style={{ background: 'rgba(214,69,69,0.08)' }}>
-                <Activity className="h-5 w-5" style={{ color: '#D64545' }} />
+              <div className="rounded-xl bg-rose-50 p-2.5">
+                <Activity className="h-5 w-5 text-rose-600" />
               </div>
-              <h2 className="text-lg font-extrabold" style={{ color: '#172B3A' }}>Dispatch Radar</h2>
-              <span className="amb-live-pulse ml-1 h-2.5 w-2.5 rounded-full" style={{ background: '#D64545', display: 'inline-block' }} />
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Dispatch queue</h2>
+                <p className="text-xs text-slate-500">Incoming citizen reports update live</p>
+              </div>
+              <span className="ml-auto h-2.5 w-2.5 rounded-full bg-rose-500 pulse-ring" />
             </div>
 
             {incidents.length === 0 ? (
-              <div className="flex h-52 flex-col items-center justify-center rounded-2xl border-2 border-dashed" style={{ borderColor: '#CBD5E0', background: 'rgba(255,255,255,0.35)' }}>
-                <div className="mb-3 h-3 w-3 animate-ping rounded-full" style={{ background: '#D64545' }} />
-                <p className="font-semibold" style={{ color: '#8795A1' }}>No pending requests. Board updates live.</p>
+              <div className="flex h-52 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50">
+                <div className="mb-3 h-3 w-3 animate-ping rounded-full bg-rose-500" />
+                <p className="font-semibold text-slate-500">No pending requests. Board updates live.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {incidents.map((incident) => (
-                  <div key={incident._id} className="flex flex-col gap-4 rounded-2xl p-4 lg:flex-row lg:items-center" style={{ background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.8)' }}>
+                  <div key={incident._id} className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:flex-row lg:items-center">
                     <img src={incident.image} alt="Incident" className="h-28 w-full rounded-xl object-cover lg:w-40" />
                     <div className="flex-1">
                       <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <span className="amb-status-pill" style={{ background: incident.aidType === 'emergency' ? '#FDECEC' : '#EAF5F0', color: incident.aidType === 'emergency' ? '#D64545' : '#168A55' }}>
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase ${
+                          incident.aidType === 'emergency' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
                           {incident.aidType}
                         </span>
-                        <span className="amb-status-pill" style={{ background: 'rgba(255,255,255,0.8)', color: '#8795A1' }}>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">
                           {incident.createdAt ? new Date(incident.createdAt).toLocaleTimeString() : 'Live'}
                         </span>
                       </div>
-                      <p className="text-sm font-medium" style={{ color: '#172B3A' }}>{incident.description || 'No description provided.'}</p>
-                      <p className="mt-2 flex items-center gap-1 text-xs font-semibold" style={{ color: '#8795A1' }}>
-                        <MapPin className="h-3 w-3" />
+                      <p className="text-sm font-bold text-slate-900">{incident.description || 'No description provided.'}</p>
+                      <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-slate-500">
+                        <MapPin className="h-3.5 w-3.5 text-[#0f5c5a]" />
                         {incident.location?.lat?.toFixed?.(4)}, {incident.location?.lng?.toFixed?.(4)}
                       </p>
                     </div>
                     <button
                       onClick={() => handleAccept(incident)}
                       disabled={loading}
-                      className="amb-btn-primary rounded-xl px-7 py-3 text-sm"
+                      className="rounded-xl bg-[#0f5c5a] px-7 py-3 text-sm font-bold text-white transition hover:bg-[#0c4c4a]"
                     >
-                      Accept Request
+                      Accept request
                     </button>
                   </div>
                 ))}
@@ -391,27 +439,26 @@ export default function AmbulanceDashboardLive() {
 
         {/* ── ACTIVE MISSION TWO-COLUMN LAYOUT ── */}
         {activeIncident && (
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.25fr_0.75fr]">
-
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.25fr_0.75fr]">
             {/* LEFT PANEL */}
-            <section className="amb-card-primary space-y-5 p-6 md:p-7">
-
+            <section className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
               {/* Active Case Header */}
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div className="mb-1.5 flex items-center gap-2" style={{ color: '#168A55' }}>
+                  <div className="mb-1.5 flex items-center gap-2 text-teal-700">
                     <CheckCircle2 className="h-4 w-4" />
-                    <span className="text-xs font-bold uppercase tracking-widest">Active Case</span>
+                    <span className="text-xs font-bold uppercase tracking-widest">Active case</span>
                   </div>
-                  <h2 className="text-xl font-bold" style={{ color: '#172B3A' }}>Incident accepted and ready for routing</h2>
+                  <h2 className="text-xl font-bold text-slate-900">Incident accepted — ready for routing</h2>
                 </div>
                 <span
-                  className="self-start rounded-full px-4 py-1.5 text-sm font-bold lg:self-auto"
-                  style={{
-                    background: activeIncident.severityLevel === 'critical' ? '#FDECEC' : activeIncident.severityLevel === 'watch' ? '#FFF4DD' : '#EAF5F0',
-                    color: activeIncident.severityLevel === 'critical' ? '#D64545' : activeIncident.severityLevel === 'watch' ? '#D99022' : '#168A55',
-                    border: `1.5px solid ${activeIncident.severityLevel === 'critical' ? '#F5AAAA' : activeIncident.severityLevel === 'watch' ? '#F5D08A' : '#7DCCA8'}`,
-                  }}
+                  className={`self-start rounded-full px-4 py-1.5 text-xs font-bold uppercase lg:self-auto ${
+                    activeIncident.severityLevel === 'critical'
+                      ? 'bg-rose-100 text-rose-800'
+                      : activeIncident.severityLevel === 'watch'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-emerald-100 text-emerald-800'
+                  }`}
                 >
                   Severity: {activeIncident.severityLevel || 'stable'}
                 </span>
@@ -419,21 +466,20 @@ export default function AmbulanceDashboardLive() {
 
               {/* Route Alert */}
               {routeAlert && (
-                <div className="flex items-start gap-3 rounded-2xl p-4" style={{ background: '#FFF4DD', border: '1px solid #F5D08A', color: '#D99022' }}>
-                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                <div className="flex items-start gap-3 rounded-2xl p-4 bg-amber-50 border border-amber-200 text-amber-800">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
                   <p className="text-sm font-semibold">{routeAlert}</p>
                 </div>
               )}
 
               {/* Incident image + vitals/form grid */}
               <div className="grid gap-5 lg:grid-cols-2">
-
                 {/* Incident Image Card */}
-                <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.8)' }}>
+                <div className="rounded-2xl p-4 bg-white border border-[#cbd8e2]">
                   <img src={activeIncident.image} alt="Incident reference" className="mb-4 h-44 w-full rounded-xl object-cover" />
-                  <p className="text-sm font-medium" style={{ color: '#172B3A' }}>{activeIncident.description || 'No extra incident description shared.'}</p>
-                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold" style={{ color: '#8795A1' }}>
-                    <MapPin className="h-3.5 w-3.5" />
+                  <p className="text-sm font-semibold text-[#0e2632]">{activeIncident.description || 'No extra incident description shared.'}</p>
+                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#5c7c8a]">
+                    <MapPin className="h-3.5 w-3.5 text-[#1e4653]" />
                     Pickup: {activeIncident.location?.lat}, {activeIncident.location?.lng}
                   </div>
                 </div>
@@ -442,22 +488,22 @@ export default function AmbulanceDashboardLive() {
                 {hospitalOptions.length === 0 ? (
                   <div className="space-y-4">
                     {selectedHospital && (
-                      <div className="rounded-2xl p-4" style={{ background: 'rgba(234,245,240,0.6)', border: '1px solid rgba(15,157,154,0.2)' }}>
-                        <div className="mb-2 flex items-center gap-2" style={{ color: '#0F9D9A' }}>
+                      <div className="rounded-2xl p-4 bg-emerald-50/80 border border-emerald-200">
+                        <div className="mb-2 flex items-center gap-2 text-emerald-800">
                           <Radio className="h-4 w-4" />
                           <span className="text-xs font-bold uppercase tracking-widest">Current Destination</span>
                         </div>
-                        <h3 className="text-lg font-bold" style={{ color: '#172B3A' }}>{selectedHospital.name}</h3>
-                        <p className="mt-1 flex items-center gap-2 text-xs font-medium" style={{ color: '#0F9D9A' }}>
+                        <h3 className="text-lg font-extrabold text-[#0e2632]">{selectedHospital.name}</h3>
+                        <p className="mt-1 flex items-center gap-2 text-xs font-semibold text-emerald-700">
                           <MapPin className="h-3.5 w-3.5" />
                           {selectedHospital.location?.lat}, {selectedHospital.location?.lng}
                         </p>
-                        <p className="mt-2 text-xs" style={{ color: '#607080' }}>Submit vitals to generate ranked hospital options.</p>
+                        <p className="mt-2 text-xs text-[#5c7c8a]">Submit vitals to generate ranked hospital options.</p>
                       </div>
                     )}
-                    <form onSubmit={handleVitalsSubmit} className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.85)' }}>
-                      <h3 className="mb-4 flex items-center gap-2 text-base font-bold" style={{ color: '#172B3A' }}>
-                        <Stethoscope className="h-5 w-5" style={{ color: '#168A55' }} />
+                    <form onSubmit={handleVitalsSubmit} className="rounded-2xl p-5 bg-white border border-[#cbd8e2]">
+                      <h3 className="mb-4 flex items-center gap-2 text-base font-extrabold text-[#0e2632]">
+                        <Stethoscope className="h-5 w-5 text-[#1e4653]" />
                         Initial Vitals &amp; Symptoms
                       </h3>
                       <div className="grid grid-cols-2 gap-3">
@@ -467,105 +513,106 @@ export default function AmbulanceDashboardLive() {
                           { label: 'Systolic BP', key: 'systolicBP' },
                           { label: 'Diastolic BP', key: 'diastolicBP' },
                         ].map((f) => (
-                          <label key={f.key} className="text-xs font-bold" style={{ color: '#607080' }}>
+                          <label key={f.key} className="text-xs font-bold text-[#5c7c8a]">
                             {f.label}
                             <input
                               type="number"
-                              className="mt-1 w-full rounded-xl p-3 text-sm font-semibold"
-                              style={{ background: 'rgba(244,247,250,0.8)', border: '1px solid rgba(96,112,128,0.2)', color: '#172B3A' }}
+                              className="mt-1 w-full rounded-xl p-2.5 text-sm font-bold bg-[#f8fafc] border border-[#cbd8e2] text-[#0e2632] focus:outline-none focus:ring-2 focus:ring-[#1e4653]"
                               value={vitals[f.key]}
                               onChange={(e) => setVitals({ ...vitals, [f.key]: e.target.value })}
                             />
                           </label>
                         ))}
                       </div>
-                      <label className="mt-3 block text-xs font-bold" style={{ color: '#607080' }}>
+                      <label className="mt-3 block text-xs font-bold text-[#5c7c8a]">
                         Symptoms
                         <textarea
-                          className="mt-1 h-24 w-full rounded-xl p-3 text-sm resize-none"
-                          style={{ background: 'rgba(244,247,250,0.8)', border: '1px solid rgba(96,112,128,0.2)', color: '#172B3A' }}
+                          className="mt-1 h-20 w-full rounded-xl p-2.5 text-sm font-medium resize-none bg-[#f8fafc] border border-[#cbd8e2] text-[#0e2632] focus:outline-none focus:ring-2 focus:ring-[#1e4653]"
                           value={vitals.symptoms}
                           onChange={(e) => setVitals({ ...vitals, symptoms: e.target.value })}
                           placeholder="chest pain, trauma, bleeding, stroke symptoms..."
                         />
                       </label>
-                      <button disabled={loading} type="submit" className="amb-btn-primary mt-4 flex w-full items-center justify-center gap-2 py-3 text-sm">
+                      <button disabled={loading} type="submit" className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1e4653] hover:bg-[#265564] py-3 text-sm font-extrabold text-white border border-[#2c5a69] shadow-sm transition">
                         Rank Hospitals <ChevronRight className="h-4 w-4" />
                       </button>
                     </form>
                   </div>
                 ) : (
                   /* ── LIVE STREAMING VITALS CARD ── */
-                  <div className="amb-card-vitals p-5">
+                  <div className="rounded-2xl p-5 bg-white border border-[#cbd8e2]">
                     <div className="mb-4 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="amb-live-pulse h-2.5 w-2.5 rounded-full" style={{ background: '#22A45D', display: 'inline-block' }} />
-                        <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#0F9D9A' }}>Live Streaming Active</span>
+                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block animate-ping" />
+                        <span className="text-xs font-extrabold uppercase tracking-widest text-emerald-800">Live Streaming Active</span>
                       </div>
-                      <span className="amb-status-pill" style={{ background: 'rgba(234,245,240,0.8)', color: '#168A55', border: '1px solid rgba(22,138,85,0.25)' }}>
+                      <span className="px-3 py-0.5 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                         {streaming ? '● Live' : '○ Waiting'}
                       </span>
                     </div>
-                    <h3 className="text-lg font-bold" style={{ color: '#172B3A' }}>{selectedHospital.name}</h3>
-                    <p className="mt-1 mb-4 flex items-center gap-1.5 text-xs font-medium" style={{ color: '#0F9D9A' }}>
-                      <MapPin className="h-3.5 w-3.5" />
-                      {selectedHospital.location?.lat}, {selectedHospital.location?.lng}
+                    <h3 className="text-lg font-extrabold text-[#0e2632]">{selectedHospital?.name}</h3>
+                    <p className="mt-1 mb-4 flex items-center gap-1.5 text-xs font-semibold text-[#5c7c8a]">
+                      <MapPin className="h-3.5 w-3.5 text-[#1e4653]" />
+                      {selectedHospital?.location?.lat}, {selectedHospital?.location?.lng}
                     </p>
 
                     {/* Vital chips */}
                     <div className="grid grid-cols-2 gap-2.5">
-                      <div className="amb-vital-chip">
+                      <div className="rounded-xl p-3 bg-[#f8fafc] border border-[#cbd8e2] text-center">
                         <div className="mb-1 flex items-center justify-center gap-1">
-                          <HeartPulse className="h-3.5 w-3.5" style={{ color: '#D64545' }} />
-                          <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: '#8795A1' }}>Heart Rate</p>
+                          <HeartPulse className="h-3.5 w-3.5 text-rose-600" />
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-[#5c7c8a]">Heart Rate</p>
                         </div>
-                        <p className="text-2xl font-black" style={{ color: '#172B3A' }}>{Math.round(vitals.heartRate)}</p>
-                        <p className="text-[10px] font-semibold" style={{ color: '#8795A1' }}>BPM</p>
+                        <p className="text-2xl font-black text-[#0e2632]">{Math.round(vitals.heartRate)}</p>
+                        <p className="text-[10px] font-semibold text-[#5c7c8a]">BPM</p>
                       </div>
-                      <div className="amb-vital-chip">
+
+                      <div className="rounded-xl p-3 bg-[#f8fafc] border border-[#cbd8e2] text-center">
                         <div className="mb-1 flex items-center justify-center gap-1">
-                          <Wind className="h-3.5 w-3.5" style={{ color: '#168A55' }} />
-                          <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: '#8795A1' }}>SpO2</p>
+                          <Wind className="h-3.5 w-3.5 text-emerald-600" />
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-[#5c7c8a]">SpO2</p>
                         </div>
-                        <p className="text-2xl font-black" style={{ color: Number(vitals.spo2) < 92 ? '#D64545' : '#172B3A' }}>{Math.round(vitals.spo2)}%</p>
-                        <p className="text-[10px] font-semibold" style={{ color: '#8795A1' }}>Oxygen</p>
+                        <p className={`text-2xl font-black ${Number(vitals.spo2) < 92 ? 'text-rose-600' : 'text-[#0e2632]'}`}>{Math.round(vitals.spo2)}%</p>
+                        <p className="text-[10px] font-semibold text-[#5c7c8a]">Oxygen</p>
                       </div>
-                      <div className="amb-vital-chip">
+
+                      <div className="rounded-xl p-3 bg-[#f8fafc] border border-[#cbd8e2] text-center">
                         <div className="mb-1 flex items-center justify-center gap-1">
-                          <Droplets className="h-3.5 w-3.5" style={{ color: '#0F9D9A' }} />
-                          <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: '#8795A1' }}>Blood Pressure</p>
+                          <Droplets className="h-3.5 w-3.5 text-blue-600" />
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-[#5c7c8a]">Blood Pressure</p>
                         </div>
-                        <p className="text-xl font-black" style={{ color: '#172B3A' }}>{Math.round(vitals.systolicBP)}/{Math.round(vitals.diastolicBP)}</p>
-                        <p className="text-[10px] font-semibold" style={{ color: '#8795A1' }}>mmHg</p>
+                        <p className="text-xl font-black text-[#0e2632]">{Math.round(vitals.systolicBP)}/{Math.round(vitals.diastolicBP)}</p>
+                        <p className="text-[10px] font-semibold text-[#5c7c8a]">mmHg</p>
                       </div>
-                      <div className="amb-vital-chip">
+
+                      <div className="rounded-xl p-3 bg-[#f8fafc] border border-[#cbd8e2] text-center">
                         <div className="mb-1 flex items-center justify-center gap-1">
-                          <Thermometer className="h-3.5 w-3.5" style={{ color: '#D99022' }} />
-                          <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: '#8795A1' }}>Temp</p>
+                          <Thermometer className="h-3.5 w-3.5 text-amber-600" />
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-[#5c7c8a]">Temp</p>
                         </div>
-                        <p className="text-2xl font-black" style={{ color: '#172B3A' }}>{Number(vitals.temperature).toFixed(1)}</p>
-                        <p className="text-[10px] font-semibold" style={{ color: '#8795A1' }}>°F</p>
+                        <p className="text-2xl font-black text-[#0e2632]">{Number(vitals.temperature).toFixed(1)}</p>
+                        <p className="text-[10px] font-semibold text-[#5c7c8a]">°F</p>
                       </div>
                     </div>
 
                     {/* Hospital requirement summary */}
-                    <div className="mt-4 rounded-xl p-3.5" style={{ background: 'rgba(255,255,255,0.65)', border: '1px solid rgba(96,112,128,0.14)' }}>
-                      <p className="mb-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8795A1' }}>Hospital Requirement Summary</p>
-                      <p className="text-xs font-semibold" style={{ color: '#172B3A' }}>
+                    <div className="mt-4 rounded-xl p-3.5 bg-[#f8fafc] border border-[#cbd8e2]">
+                      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#5c7c8a]">Hospital Requirement Summary</p>
+                      <p className="text-xs font-semibold text-[#0e2632]">
                         Specialists: {ensureStringList(activeIncident.mlPrediction?.specialists_Needed, ['general']).join(', ')}
                       </p>
-                      <p className="text-xs font-semibold" style={{ color: '#172B3A' }}>
+                      <p className="text-xs font-semibold text-[#0e2632]">
                         Beds — ICU: {activeIncident.mlPrediction?.icuBeds_Required || 0} · Vent: {activeIncident.mlPrediction?.ventilators_Required || 0} · General: {activeIncident.mlPrediction?.generalBeds_Required || 0}
                       </p>
-                      <p className="mt-1.5 text-xs" style={{ color: '#8795A1' }}>Symptoms: {vitals.symptoms || 'Not recorded'}</p>
+                      <p className="mt-1 text-xs text-[#5c7c8a]">Symptoms: {vitals.symptoms || 'Not recorded'}</p>
                     </div>
 
                     {/* Action buttons */}
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                      <button onClick={handleMarkArrival} disabled={loading} className="amb-btn-primary flex-1 py-3 text-sm">
+                      <button onClick={handleMarkArrival} disabled={loading} className="flex-1 py-3 rounded-xl bg-[#1e4653] hover:bg-[#265564] text-white font-extrabold text-xs shadow-sm transition border border-[#2c5a69]">
                         Mark Arrival
                       </button>
-                      <button onClick={resetMission} disabled={loading} className="amb-btn-secondary flex-1 py-3 text-sm">
+                      <button onClick={resetMission} disabled={loading} className="flex-1 py-3 rounded-xl bg-white hover:bg-slate-100 text-[#0e2632] font-extrabold text-xs border border-[#cbd8e2] transition">
                         Clear Mission
                       </button>
                     </div>
@@ -575,39 +622,38 @@ export default function AmbulanceDashboardLive() {
 
               {/* ── HOSPITAL RANKING ── */}
               {hospitalOptions.length > 0 && (
-                <div className="space-y-4">
+                <div className="space-y-4 pt-2">
                   <div className="flex items-center gap-2">
-                    <HeartPulse className="h-5 w-5" style={{ color: '#168A55' }} />
-                    <h3 className="text-base font-bold" style={{ color: '#172B3A' }}>Hospital Ranking</h3>
+                    <HeartPulse className="h-5 w-5 text-[#1e4653]" />
+                    <h3 className="text-base font-extrabold text-[#0e2632]">Hospital Ranking</h3>
                   </div>
 
                   {rankedBestHospital && (
-                    <div className="rounded-2xl p-5" style={{ background: 'rgba(234,245,240,0.65)', border: '1.5px solid rgba(22,138,85,0.2)', backdropFilter: 'blur(16px)' }}>
+                    <div className="rounded-2xl p-5 bg-emerald-50/90 border border-emerald-200">
                       <div className="mb-3 flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#168A55' }}>Best Suitable Hospital</p>
-                          <h4 className="text-xl font-bold" style={{ color: '#172B3A' }}>{rankedBestHospital.name}</h4>
-                          <p className="text-xs font-semibold" style={{ color: '#168A55' }}>{rankedBestHospital.distanceKm} km away</p>
+                          <p className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-800">Best Suitable Hospital</p>
+                          <h4 className="text-xl font-extrabold text-[#0e2632]">{rankedBestHospital.name}</h4>
+                          <p className="text-xs font-bold text-emerald-700">{rankedBestHospital.distanceKm} km away</p>
                         </div>
-                        <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: 'rgba(255,255,255,0.85)', color: '#168A55', border: '1px solid rgba(22,138,85,0.3)' }}>
+                        <span className="rounded-full px-3 py-1 text-xs font-bold bg-white text-emerald-800 border border-emerald-300">
                           Recommended
                         </span>
                       </div>
-                      <p className="text-sm font-medium" style={{ color: '#172B3A' }}>
+                      <p className="text-sm font-bold text-[#0e2632]">
                         ICU {rankedBestHospital.availableResources?.icuBeds || 0} · Vent {rankedBestHospital.availableResources?.ventilators || 0} · General {rankedBestHospital.availableResources?.generalBeds || 0}
                       </p>
-                      <p className="mt-1 text-sm" style={{ color: '#607080' }}>
+                      <p className="mt-1 text-xs text-[#5c7c8a]">
                         Specialists: {ensureStringList(rankedBestHospital.availableResources?.specialists, ['general']).join(', ')}
                       </p>
                       <button
                         onClick={() => handleSelectHospital(rankedBestHospital.hospitalId)}
                         disabled={loading}
-                        className="mt-4 w-full rounded-xl py-3 text-sm font-bold transition"
-                        style={
+                        className={`mt-4 w-full rounded-xl py-3 text-sm font-extrabold transition shadow-sm ${
                           selectedHospital?.hospitalId === rankedBestHospital.hospitalId
-                            ? { background: '#168A55', color: '#fff' }
-                            : { background: 'rgba(255,255,255,0.8)', color: '#168A55', border: '1.5px solid rgba(22,138,85,0.4)' }
-                        }
+                            ? 'bg-[#1e4653] text-white border border-[#2c5a69]'
+                            : 'bg-white text-[#1e4653] border border-[#cbd8e2] hover:bg-slate-50'
+                        }`}
                       >
                         {selectedHospital?.hospitalId === rankedBestHospital.hospitalId ? 'Chosen Hospital ✓' : 'Choose Best Suitable Hospital'}
                       </button>
@@ -616,35 +662,33 @@ export default function AmbulanceDashboardLive() {
 
                   {alternativeHospitals.length > 0 && (
                     <div>
-                      <h4 className="mb-3 text-sm font-bold" style={{ color: '#607080' }}>All Other Options</h4>
+                      <h4 className="mb-3 text-xs font-bold text-[#5c7c8a]">All Other Options</h4>
                       <div className="grid gap-3 lg:grid-cols-2">
                         {alternativeHospitals.map((hospital) => (
                           <div
                             key={hospital.hospitalId}
-                            className="rounded-2xl p-4"
-                            style={
+                            className={`rounded-2xl p-4 border transition ${
                               selectedHospital?.hospitalId === hospital.hospitalId
-                                ? { background: 'rgba(234,245,240,0.6)', border: '1.5px solid rgba(22,138,85,0.25)' }
-                                : { background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.8)' }
-                            }
+                                ? 'bg-emerald-50/80 border-emerald-300'
+                                : 'bg-white border-[#cbd8e2]'
+                            }`}
                           >
-                            <h4 className="text-base font-bold" style={{ color: '#172B3A' }}>{hospital.name}</h4>
-                            <p className="text-xs font-semibold" style={{ color: '#8795A1' }}>{hospital.distanceKm} km away</p>
-                            <p className="mt-2 text-xs font-medium" style={{ color: '#172B3A' }}>
+                            <h4 className="text-base font-bold text-[#0e2632]">{hospital.name}</h4>
+                            <p className="text-xs font-semibold text-[#5c7c8a]">{hospital.distanceKm} km away</p>
+                            <p className="mt-2 text-xs font-semibold text-[#0e2632]">
                               ICU {hospital.availableResources?.icuBeds || 0} · Vent {hospital.availableResources?.ventilators || 0} · General {hospital.availableResources?.generalBeds || 0}
                             </p>
-                            <p className="mt-1 text-xs" style={{ color: '#607080' }}>
+                            <p className="mt-1 text-xs text-[#5c7c8a]">
                               Specialists: {ensureStringList(hospital.availableResources?.specialists, ['general']).join(', ')}
                             </p>
                             <button
                               onClick={() => handleSelectHospital(hospital.hospitalId)}
                               disabled={loading}
-                              className="mt-3 w-full rounded-xl py-2.5 text-xs font-bold transition"
-                              style={
+                              className={`mt-3 w-full rounded-xl py-2.5 text-xs font-extrabold transition ${
                                 selectedHospital?.hospitalId === hospital.hospitalId
-                                  ? { background: '#168A55', color: '#fff' }
-                                  : { background: 'rgba(255,255,255,0.8)', color: '#172B3A', border: '1px solid rgba(96,112,128,0.2)' }
-                              }
+                                  ? 'bg-[#1e4653] text-white border border-[#2c5a69]'
+                                  : 'bg-[#f8fafc] text-[#0e2632] border border-[#cbd8e2] hover:bg-slate-100'
+                              }`}
                             >
                               {selectedHospital?.hospitalId === hospital.hospitalId ? 'Chosen Hospital ✓' : 'Choose Hospital'}
                             </button>
@@ -653,32 +697,25 @@ export default function AmbulanceDashboardLive() {
                       </div>
                     </div>
                   )}
-
-                  {rankedBestHospital && (
-                    <p className="text-xs font-semibold" style={{ color: '#8795A1' }}>
-                      Best match: <span style={{ color: '#168A55' }}>{rankedBestHospital.name}</span>. Ranked from registered hospital inventory.
-                    </p>
-                  )}
                 </div>
               )}
             </section>
 
             {/* RIGHT PANEL */}
-            <section className="space-y-5">
-
+            <section className="space-y-6">
               {/* Live Route Map */}
-              <div className="amb-card-map p-5">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center gap-3">
-                  <div className="rounded-xl p-2" style={{ background: 'rgba(15,157,154,0.1)' }}>
-                    <Route className="h-5 w-5" style={{ color: '#0F9D9A' }} />
+                  <div className="rounded-xl bg-sky-50 p-2.5">
+                    <Route className="h-5 w-5 text-sky-700" />
                   </div>
-                  <h2 className="text-base font-extrabold" style={{ color: '#172B3A' }}>Live Route</h2>
+                  <h2 className="text-base font-bold text-slate-900">Live route</h2>
                 </div>
-                <div className="overflow-hidden rounded-2xl" style={{ height: '380px', border: '1px solid rgba(96,112,128,0.15)' }}>
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50" style={{ height: '380px' }}>
                   <LeafletMap
                     origin={mapOrigin}
                     destination={selectedHospital?.location || null}
-                    strokeColor="#168A55"
+                    strokeColor="#0f5c5a"
                     originLabel="A"
                     destLabel="H"
                     height="380px"
@@ -686,16 +723,16 @@ export default function AmbulanceDashboardLive() {
                 </div>
 
                 {/* Current Destination */}
-                <div className="mt-4 rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.85)' }}>
-                  <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#8795A1' }}>Current Destination</p>
-                  <p className="mt-1 text-sm font-bold" style={{ color: '#172B3A' }}>
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Current destination</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900">
                     {selectedHospital ? `${selectedHospital.name}` : 'No hospital selected yet'}
                   </p>
                   {selectedHospital && (
-                    <p className="text-xs font-medium" style={{ color: '#607080' }}>Status: {selectedHospital.status}</p>
+                    <p className="text-xs font-semibold text-slate-500">Status: {selectedHospital.status}</p>
                   )}
-                  <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold" style={{ color: '#8795A1' }}>
-                    <Navigation className="h-3.5 w-3.5" />
+                  <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                    <Navigation className="h-3.5 w-3.5 text-[#0f5c5a]" />
                     Route auto-updates when critical vitals trigger a reroute.
                   </p>
                 </div>
@@ -703,35 +740,35 @@ export default function AmbulanceDashboardLive() {
 
               {/* Mission Log */}
               {recentIncidents.length > 0 && (
-                <div className="amb-card-secondary p-5">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                   <div className="mb-4 flex items-center gap-2">
-                    <Activity className="h-5 w-5" style={{ color: '#0F9D9A' }} />
-                    <h3 className="text-base font-bold" style={{ color: '#172B3A' }}>Mission Log</h3>
+                    <Activity className="h-5 w-5 text-[#0f5c5a]" />
+                    <h3 className="text-base font-bold text-slate-900">Mission log</h3>
                   </div>
                   <div className="space-y-3">
                     {recentIncidents.map((incident) => (
-                      <div key={incident._id} className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.65)', border: '1px solid rgba(255,255,255,0.85)' }}>
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <div key={incident._id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
                           {incident.status && (
-                            <span className="amb-status-pill" style={{ background: 'rgba(234,245,240,0.8)', color: '#168A55', border: '1px solid rgba(22,138,85,0.2)' }}>
+                            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
                               {incident.status}
                             </span>
                           )}
                           {incident.transportStatus && (
-                            <span className="amb-status-pill" style={{ background: 'rgba(234,245,255,0.8)', color: '#0F9D9A', border: '1px solid rgba(15,157,154,0.2)' }}>
+                            <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-bold text-sky-800">
                               {incident.transportStatus}
                             </span>
                           )}
                           {incident.arrivalStatus && (
-                            <span className="amb-status-pill" style={{ background: 'rgba(255,244,221,0.8)', color: '#D99022', border: '1px solid rgba(217,144,34,0.2)' }}>
+                            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
                               {incident.arrivalStatus}
                             </span>
                           )}
                         </div>
-                        <p className="text-sm font-semibold" style={{ color: '#172B3A' }}>
+                        <p className="text-sm font-semibold text-slate-900">
                           {incident.description || 'No incident description'}
                         </p>
-                        <p className="mt-1 text-xs font-semibold" style={{ color: '#8795A1' }}>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
                           Destination: {incident.assignedHospital?.name || incident.selectedHospital?.name || 'Not chosen'}
                         </p>
                       </div>
@@ -740,10 +777,8 @@ export default function AmbulanceDashboardLive() {
                 </div>
               )}
             </section>
-
           </div>
         )}
-
       </div>
     </div>
   )
